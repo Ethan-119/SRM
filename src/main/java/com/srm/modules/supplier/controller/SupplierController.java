@@ -1,11 +1,15 @@
 package com.srm.modules.supplier.controller;
 
 import com.srm.common.Result;
+import com.srm.modules.supplier.dto.SupplierDTO;
 import com.srm.modules.supplier.entity.Supplier;
 import com.srm.modules.supplier.service.SupplierService;
+import com.srm.modules.supplier.vo.SupplierVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,26 +24,33 @@ public class SupplierController {
 
     @Operation(summary = "查询供应商列表")
     @GetMapping
-    public Result<List<Supplier>> list() {
-        return Result.ok(supplierService.list());
+    public Result<List<SupplierVO>> list() {
+        List<Supplier> suppliers = supplierService.list();
+        List<SupplierVO> vos = suppliers.stream().map(this::toVO).toList();
+        return Result.ok(vos);
     }
 
     @Operation(summary = "根据ID查询供应商")
     @GetMapping("/{id}")
-    public Result<Supplier> getById(@PathVariable Long id) {
-        return Result.ok(supplierService.getById(id));
+    public Result<SupplierVO> getById(@PathVariable Long id) {
+        Supplier supplier = supplierService.getById(id);
+        return Result.ok(toVO(supplier));
     }
 
     @Operation(summary = "新增供应商")
     @PostMapping
-    public Result<Void> save(@RequestBody Supplier supplier) {
+    public Result<Void> save(@Valid @RequestBody SupplierDTO dto) {
+        Supplier supplier = new Supplier();
+        BeanUtils.copyProperties(dto, supplier);
         supplierService.save(supplier);
         return Result.ok();
     }
 
     @Operation(summary = "更新供应商")
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @RequestBody Supplier supplier) {
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody SupplierDTO dto) {
+        Supplier supplier = new Supplier();
+        BeanUtils.copyProperties(dto, supplier);
         supplier.setId(id);
         supplierService.updateById(supplier);
         return Result.ok();
@@ -50,5 +61,11 @@ public class SupplierController {
     public Result<Void> delete(@PathVariable Long id) {
         supplierService.removeById(id);
         return Result.ok();
+    }
+
+    private SupplierVO toVO(Supplier supplier) {
+        SupplierVO vo = new SupplierVO();
+        BeanUtils.copyProperties(supplier, vo);
+        return vo;
     }
 }

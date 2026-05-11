@@ -11,8 +11,9 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/srm?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false
     username: root
-    password: root
+    password: 123456
     hikari:
+      pool-name: Mysql
       minimum-idle: 5
       maximum-pool-size: 20
       idle-timeout: 300000
@@ -23,8 +24,10 @@ spring:
     redis:
       host: localhost
       port: 6379
-      password:
-      database: 0
+      # 仅当 Redis 启用 ACL（Redis 6+ 且配置了用户）时才配置 username；单机 requirepass 请勿填写
+      password: 123456
+      database: 15
+      client-name: Redis
       lettuce:
         pool:
           max-active: 8

@@ -6,6 +6,7 @@ import org.redisson.config.Config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.StringUtils;
 
 @Configuration
 public class RedisConfig {
@@ -15,6 +16,9 @@ public class RedisConfig {
 
     @Value("${spring.data.redis.port}")
     private int port;
+
+    @Value("${spring.data.redis.username:}")
+    private String username;
 
     @Value("${spring.data.redis.password:}")
     private String password;
@@ -26,10 +30,13 @@ public class RedisConfig {
     public RedissonClient redissonClient() {
         Config config = new Config();
         String address = "redis://" + host + ":" + port;
-        config.useSingleServer()
+        var single = config.useSingleServer()
                 .setAddress(address)
-                .setPassword(password.isEmpty() ? null : password)
+                .setPassword(StringUtils.hasText(password) ? password : null)
                 .setDatabase(database);
+        if (StringUtils.hasText(username)) {
+            single.setUsername(username);
+        }
         return Redisson.create(config);
     }
 }
