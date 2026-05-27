@@ -1,0 +1,26 @@
+# 集合名称：在向量数据库中用于存储嵌入向量的逻辑分组名称
+collection_name: srm_supplier
+
+# 持久化目录：指定向量数据库文件在本地磁盘保存的路径
+persist_directory: chroma_db
+
+# K 值：检索时返回的最相似结果的数量
+k: 3
+
+# 数据路径：存放原始文档或数据文件的目录
+data_path: data
+
+# MD5 存储文件：用于记录文件 MD5 校验和，用于去重
+md5_hex_store: md5.text
+
+# 允许的知识库文件类型
+allow_knowledge_file_type: ["txt", "pdf"]
+
+# 文本块大小：每个文本块包含的字符数
+chunk_size: 200
+
+# 文本块重叠：相邻文本块之间重叠的字符数
+chunk_overlap: 20
+
+# 分隔符列表：按优先级使用这些符号切分文本
+separators: ["\n\n", "\n", ".", "!", "?", "。", "！", "？", " ", ""]

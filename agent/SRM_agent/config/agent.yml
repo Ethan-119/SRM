@@ -1,0 +1,2 @@
+# SRM Agent 外部数据路径配置
+supplier_data_path: data/knowledge/supplier_guide.txt
