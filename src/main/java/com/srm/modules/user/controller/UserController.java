@@ -10,11 +10,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import at.favre.lib.crypto.bcrypt.BCrypt;
 import org.springframework.beans.BeanUtils;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Tag(name = "用户管理")
@@ -24,13 +25,15 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
-    private final PasswordEncoder passwordEncoder;
 
     @Operation(summary = "查询用户列表")
     @GetMapping
     public Result<List<UserVO>> list() {
         List<User> users = userService.list();
-        List<UserVO> vos = users.stream().map(this::toVO).toList();
+        List<UserVO> vos = new ArrayList<>();
+        for (User user : users) {
+            vos.add(toVO(user));
+        }
         return Result.ok(vos);
     }
 
@@ -53,7 +56,7 @@ public class UserController {
         }
         User user = new User();
         BeanUtils.copyProperties(dto, user);
-        user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        user.setPassword(BCrypt.withDefaults().hashToString(12, dto.getPassword().toCharArray()));
         user.setStatus(dto.getStatus() != null ? dto.getStatus() : 1);
         user.setIsAdmin(dto.getIsAdmin() != null ? dto.getIsAdmin() : 0);
         userService.save(user);
@@ -70,7 +73,7 @@ public class UserController {
         BeanUtils.copyProperties(dto, user, "password", "username");
         // 填写了密码才更新
         if (StringUtils.hasText(dto.getPassword())) {
-            user.setPassword(passwordEncoder.encode(dto.getPassword()));
+            user.setPassword(BCrypt.withDefaults().hashToString(12, dto.getPassword().toCharArray()));
         }
         user.setId(id);
         userService.updateById(user);

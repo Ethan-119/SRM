@@ -1,9 +1,12 @@
 package com.srm.modules.order.service.impl;
 
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.srm.common.CacheConstants;
 import com.srm.common.exception.BusinessException;
+import com.srm.modules.order.dto.OrderPageDTO;
 import com.srm.modules.order.entity.Order;
 import com.srm.modules.order.mapper.OrderMapper;
 import com.srm.modules.order.service.OrderService;
@@ -16,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.Serializable;
 import java.time.Duration;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -31,7 +35,25 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final RedissonClient redissonClient;
     private final StringRedisTemplate stringRedisTemplate;
 
+    private static final Random TTL_RANDOM = new Random();
+
     // ==================== 创建订单（分布式锁防重） ====================
+
+    @Override
+    public IPage<Order> pageList(OrderPageDTO queryDTO) {
+        long pageNum = 1L;
+        long pageSize = 10L;
+        if (queryDTO != null) {
+            if (queryDTO.getPageNum() != null && queryDTO.getPageNum() > 0) {
+                pageNum = queryDTO.getPageNum();
+            }
+            if (queryDTO.getPageSize() != null && queryDTO.getPageSize() > 0) {
+                pageSize = queryDTO.getPageSize();
+            }
+        }
+        Page<Order> page = new Page<>(pageNum, pageSize);
+        return baseMapper.pageList(page, queryDTO);
+    }
 
     @Override
     public boolean save(Order entity) {
@@ -93,19 +115,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             return;
         }
         String key = CacheConstants.ORDER_STATUS_KEY + order.getId();
-        OrderStatusSnapshot snapshot = new OrderStatusSnapshot(order.getId(), order.getStatus());
+        StatusSnapshot snapshot = new StatusSnapshot(order.getId(), order.getStatus());
+        long ttl = CacheConstants.ORDER_STATUS_TTL_MINUTES * 60;
+        ttl += TTL_RANDOM.nextInt(CacheConstants.TTL_JITTER_MAX_SECONDS);
         stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(snapshot),
-                Duration.ofMinutes(CacheConstants.ORDER_STATUS_TTL_MINUTES));
+                Duration.ofSeconds(ttl));
     }
 
     /** 订单状态快照 — 仅缓存 status，完整数据走 DB */
-    private static class OrderStatusSnapshot implements java.io.Serializable {
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    private static class StatusSnapshot implements java.io.Serializable {
         private final Long id;
         private final Integer status;
-
-        OrderStatusSnapshot(Long id, Integer status) {
-            this.id = id;
-            this.status = status;
-        }
     }
 }

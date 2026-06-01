@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.srm.modules.order.mapper.OrderMapper">
+
+    <sql id="Base_Column_List">
+        id, create_time, update_time, create_by, update_by, is_deleted,
+        order_no, supplier_id, material_name, quantity, unit_price, total_amount,
+        delivery_date, status, received_time, remark
+    </sql>
+
+    <select id="pageList" resultType="com.srm.modules.order.entity.Order">
+        select
+        <include refid="Base_Column_List"/>
+        from srm_purchase_order
+        <where>
+            is_deleted = 0
+            <if test="q != null and q.orderNo != null and q.orderNo != ''">
+                and order_no like concat('%', #{q.orderNo}, '%')
+            </if>
+            <if test="q != null and q.status != null">
+                and status = #{q.status}
+            </if>
+        </where>
+        order by create_time desc
+    </select>
+
+</mapper>

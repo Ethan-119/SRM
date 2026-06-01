@@ -1,7 +1,10 @@
 package com.srm.modules.order.controller;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.srm.common.PageResult;
 import com.srm.common.Result;
 import com.srm.modules.order.dto.OrderDTO;
+import com.srm.modules.order.dto.OrderPageDTO;
 import com.srm.modules.order.entity.Order;
 import com.srm.modules.order.service.OrderService;
 import com.srm.modules.order.vo.OrderVO;
@@ -12,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Tag(name = "采购订单管理")
@@ -26,8 +30,26 @@ public class OrderController {
     @GetMapping
     public Result<List<OrderVO>> list() {
         List<Order> orders = orderService.list();
-        List<OrderVO> vos = orders.stream().map(this::toVO).toList();
+        List<OrderVO> vos = new ArrayList<>();
+        for (Order order : orders) {
+            vos.add(toVO(order));
+        }
         return Result.ok(vos);
+    }
+
+    @Operation(summary = "分页查询订单列表（XML）")
+    @GetMapping("/page")
+    public Result<PageResult<OrderVO>> page(OrderPageDTO queryDTO) {
+        IPage<Order> pageData = orderService.pageList(queryDTO);
+        List<OrderVO> records = new ArrayList<>();
+        for (Order order : pageData.getRecords()) {
+            records.add(toVO(order));
+        }
+        long current = pageData.getCurrent();
+        long size = pageData.getSize();
+        long total = pageData.getTotal();
+        PageResult<OrderVO> result = PageResult.of(current, size, total, records);
+        return Result.ok(result);
     }
 
     @Operation(summary = "根据ID查询订单")

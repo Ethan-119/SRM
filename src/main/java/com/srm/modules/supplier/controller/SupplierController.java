@@ -1,7 +1,10 @@
 package com.srm.modules.supplier.controller;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.srm.common.PageResult;
 import com.srm.common.Result;
 import com.srm.modules.supplier.dto.SupplierDTO;
+import com.srm.modules.supplier.dto.SupplierPageDTO;
 import com.srm.modules.supplier.entity.Supplier;
 import com.srm.modules.supplier.service.SupplierService;
 import com.srm.modules.supplier.vo.SupplierVO;
@@ -12,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Tag(name = "供应商管理")
@@ -26,8 +30,26 @@ public class SupplierController {
     @GetMapping
     public Result<List<SupplierVO>> list() {
         List<Supplier> suppliers = supplierService.list();
-        List<SupplierVO> vos = suppliers.stream().map(this::toVO).toList();
+        List<SupplierVO> vos = new ArrayList<>();
+        for (Supplier supplier : suppliers) {
+            vos.add(toVO(supplier));
+        }
         return Result.ok(vos);
+    }
+
+    @Operation(summary = "分页查询供应商列表（XML）")
+    @GetMapping("/page")
+    public Result<PageResult<SupplierVO>> page(SupplierPageDTO queryDTO) {
+        IPage<Supplier> pageData = supplierService.pageList(queryDTO);
+        List<SupplierVO> records = new ArrayList<>();
+        for (Supplier supplier : pageData.getRecords()) {
+            records.add(toVO(supplier));
+        }
+        long current = pageData.getCurrent();
+        long size = pageData.getSize();
+        long total = pageData.getTotal();
+        PageResult<SupplierVO> result = PageResult.of(current, size, total, records);
+        return Result.ok(result);
     }
 
     @Operation(summary = "根据ID查询供应商")

@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8083
 
 spring:
   profiles:
@@ -43,6 +43,11 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
   mapper-locations: classpath*:/mapper/**/*.xml
+
+srm:
+  agent:
+    base-url: http://127.0.0.1:8000
+    api-key: srm-agent-internal-key-2026
 
 # Knife4j
 springdoc:

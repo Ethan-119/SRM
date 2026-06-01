@@ -32,4 +32,24 @@ public final class CacheConstants {
 
     /** 防重锁 — 5 秒 */
     public static final long LOCK_TTL_SECONDS = 5;
+
+    /** 登录 Token — 按 userId，用于单设备登录 */
+    public static final String LOGIN_TOKEN_KEY = "srm:token:";
+
+    /** Token 缓存 TTL — 与 JWT 过期时间一致 */
+    public static final long TOKEN_TTL_HOURS = 24;
+
+    // ========== 缓存防护 ==========
+
+    /** 空值缓存 TTL — 5 分钟，防缓存穿透 */
+    public static final long NULL_CACHE_TTL_MINUTES = 5;
+
+    /** TTL 随机偏移上限 — 600 秒，防缓存雪崩 */
+    public static final int TTL_JITTER_MAX_SECONDS = 600;
+
+    /** 供应商详情互斥锁 — 防缓存击穿 */
+    public static final String LOCK_SUPPLIER_INFO = "srm:lock:supplier:info:";
+
+    /** 字典类型互斥锁 — 防缓存击穿 */
+    public static final String LOCK_DICT_TYPE = "srm:lock:dict:type:";
 }

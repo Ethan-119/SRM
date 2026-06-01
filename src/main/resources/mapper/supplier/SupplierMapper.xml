@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.srm.modules.supplier.mapper.SupplierMapper">
+
+    <sql id="Base_Column_List">
+        id, create_time, update_time, create_by, update_by, is_deleted,
+        supplier_code, supplier_name, contact_person, contact_phone, email,
+        region, main_category, qualification_level, status, address, remark
+    </sql>
+
+<!-- 分页返回实体，vo转换有问题，需要手动转换 -->
+    <select id="pageList" resultType="com.srm.modules.supplier.entity.Supplier">
+        select
+        <include refid="Base_Column_List"/>
+        from srm_supplier
+        <where>
+            is_deleted = 0
+            <if test="q != null and q.supplierName != null and q.supplierName != ''">
+                and supplier_name like concat('%', #{q.supplierName}, '%')
+            </if>
+            <if test="q != null and q.status != null">
+                and status = #{q.status}
+            </if>
+        </where>
+        order by create_time desc
+    </select>
+
+</mapper>
