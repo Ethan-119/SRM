@@ -15,7 +15,7 @@ class BaseModelFactory(ABC):
 
 class ChatModelFactory(BaseModelFactory):
     def generator(self) -> Optional[Embeddings | BaseChatModel]:
-        model = ChatTongyi(model=rag_conf["chat_model_name"])
+        model = ChatTongyi(model=rag_conf["chat_model_name"], streaming=True)
         return model
 
 

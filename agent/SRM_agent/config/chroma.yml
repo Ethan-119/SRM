@@ -8,7 +8,7 @@ persist_directory: chroma_db
 k: 3
 
 # 数据路径：存放原始文档或数据文件的目录
-data_path: data
+data_path: data/knowledge
 
 # MD5 存储文件：用于记录文件 MD5 校验和，用于去重
 md5_hex_store: md5.text

@@ -12,7 +12,7 @@ import uvicorn
 import json
 
 from langchain.agents import create_agent
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
 from model.factory import chat_model
 from utils.prompt_loader import load_system_prompts
 from tools.agent_tools import (
@@ -20,8 +20,10 @@ from tools.agent_tools import (
     search_suppliers,
     get_price_reference,
     calculate_total_cost,
+    compare_supplier_quotes,
     get_supplier_status_flow,
     get_order_status_flow,
+    _thread_local,
 )
 from tools.middleware import monitor_tool, log_before_model
 from memory.memory_service import MemoryService
@@ -77,6 +79,7 @@ class SRMAgent:
                 search_suppliers,
                 get_price_reference,
                 calculate_total_cost,
+                compare_supplier_quotes,
                 get_supplier_status_flow,
                 get_order_status_flow,
             ],
@@ -96,6 +99,9 @@ class SRMAgent:
         Returns:
             Agent 的完整回复文本
         """
+        # 设置当前 session_id 到线程本地存储，供 RAG 评估日志使用
+        _thread_local.session_id = session_id
+
         # 1. 加载历史消息
         history_messages = self.memory_service.get_messages(session_id)
 
@@ -104,28 +110,30 @@ class SRMAgent:
             "messages": history_messages + [HumanMessage(content=query)]
         }
 
-        # 3. 收集完整回复
+        # 3. 收集完整回复（只取 AIMessage，排除工具结果）
         full_response = ""
 
         # 4. 流式执行并收集结果
         for chunk in self.agent.stream(input_dict, stream_mode="values"):
             latest_message = chunk["messages"][-1]
-            if latest_message.content:
+            if isinstance(latest_message, AIMessage) and latest_message.content:
                 full_response = latest_message.content.strip()
 
         # 5. 保存对话历史
-        self.memory_service.add_messages(session_id, query, full_response)
+        if full_response:
+            self.memory_service.add_messages(session_id, query, full_response)
+        else:
+            logger.warning(f"[Agent] 未生成回复，session={session_id} query={query[:50]}...")
 
         return full_response
 
     def execute_stream(self, query: str, session_id: str):
         """
-        执行 Agent 推理（流式），返回 SSE 事件流
-
-        Args:
-            query: 用户当前问题
-            session_id: 会话ID
+        执行 Agent 推理（流式），返回 SSE 事件流，逐 token 输出。
+        stream_mode="messages" 配合模型 streaming=True，实现 token 级增量推送。
         """
+        _thread_local.session_id = session_id
+
         history_messages = self.memory_service.get_messages(session_id)
 
         input_dict = {
@@ -134,17 +142,35 @@ class SRMAgent:
 
         full_response = ""
 
-        for chunk in self.agent.stream(input_dict, stream_mode="values"):
-            latest_message = chunk["messages"][-1]
-            if latest_message.content:
-                content = latest_message.content.strip()
-                full_response = content
-                yield f"data: {json.dumps({'content': content})}\n\n"
+        try:
+            logger.info(f"[Agent] 开始执行 stream（token级），session={session_id}")
+            for chunk in self.agent.stream(input_dict, stream_mode="messages"):
+                # messages 模式产出 (message_chunk, metadata) 元组
+                if isinstance(chunk, tuple) and len(chunk) == 2:
+                    msg_chunk = chunk[0]
+                else:
+                    msg_chunk = chunk
 
-        # 保存对话历史
-        self.memory_service.add_messages(session_id, query, full_response)
+                if isinstance(msg_chunk, AIMessageChunk) and msg_chunk.content:
+                    delta = msg_chunk.content
+                    if isinstance(delta, list):
+                        delta = "".join(
+                            b.get("text", "") if isinstance(b, dict) else str(b)
+                            for b in delta
+                        )
+                    if delta:
+                        full_response += delta
+                        yield f"data: {json.dumps({'content': delta}, ensure_ascii=False)}\n\n"
 
-        # 发送完成信号
+            logger.info(f"[Agent] stream 完成，session={session_id} response_len={len(full_response)}")
+        except Exception as e:
+            logger.error(f"[Agent] stream 执行异常: {type(e).__name__}: {e}", exc_info=True)
+            yield f"data: {json.dumps({'content': f'[系统错误] Agent 执行异常: {e}'})}\n\n"
+        finally:
+            self.memory_service.add_messages(session_id, query, full_response)
+            if not full_response:
+                logger.warning(f"[Agent] 未生成回复，session={session_id} query={query[:80]}...")
+
         yield f"data: {json.dumps({'done': True})}\n\n"
 
     def get_history(self, session_id: str):
