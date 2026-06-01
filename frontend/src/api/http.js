@@ -28,7 +28,7 @@ function friendlyNetworkError(err) {
     (!err.response && msg.includes('AggregateError'))
   ) {
     return new Error(
-      '无法连接后端服务。请先在本机启动 Spring Boot（默认端口 8080），确认地址为 http://localhost:8080 后再刷新页面。'
+      '无法连接后端服务。请先在本机启动 Spring Boot（默认端口 8083），确认地址为 http://localhost:8083 后再刷新页面。'
     )
   }
   return null

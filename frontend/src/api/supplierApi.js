@@ -19,3 +19,7 @@ export function updateSupplier(id, payload) {
 export function deleteSupplier(id) {
   return http.delete(`/supplier/${id}`).then((r) => r.data)
 }
+
+export function fetchSupplierPage(params = {}) {
+  return http.get('/supplier/page', { params }).then((r) => r.data)
+}

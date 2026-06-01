@@ -26,6 +26,12 @@ const router = createRouter({
       component: () => import('@/views/OrderWorkbench.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/agent',
+      name: 'agent',
+      component: () => import('@/views/AgentChat.vue'),
+      meta: { requiresAuth: true },
+    },
   ],
 })
 

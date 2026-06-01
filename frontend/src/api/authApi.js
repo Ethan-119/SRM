@@ -1,10 +1,8 @@
 import http from './http'
 
 /**
- * 与后端约定：POST /api/auth/login
+ * POST /api/auth/login
  * Body: { username, password }
- * Result.data 示例：{ token } 或 { accessToken } 或 { access_token }
- * 若你的 Controller 路径不同，只改下方 URL 即可。
  */
 export async function login(username, password) {
   const result = await http.post('/auth/login', {
@@ -23,4 +21,9 @@ export async function login(username, password) {
   const name =
     raw.username ?? raw.userName ?? raw.name ?? raw.loginName ?? username.trim()
   return { token: String(token), username: String(name) }
+}
+
+/** POST /api/auth/logout — 清除服务端 Redis Token */
+export async function logout() {
+  await http.post('/auth/logout')
 }

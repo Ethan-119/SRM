@@ -1,11 +1,12 @@
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import {
-  fetchSupplierList,
+  fetchSupplierPage,
   createSupplier,
   updateSupplier,
   deleteSupplier,
 } from '@/api/supplierApi'
+import Pagination from '@/components/Pagination.vue'
 
 const STATUS_MAP = {
   0: '注册',
@@ -18,10 +19,24 @@ const STATUS_MAP = {
 
 const LEVEL_MAP = { 1: '初级', 2: '中级', 3: '高级' }
 
-const list = ref([])
 const loading = ref(false)
 const error = ref('')
 const success = ref('')
+
+// --- 分页与筛选 ---
+const query = reactive({
+  pageNum: 1,
+  pageSize: 10,
+  supplierName: '',
+  status: '',
+})
+
+const pageResult = ref({
+  pageNum: 1,
+  pageSize: 10,
+  total: 0,
+  records: [],
+})
 
 const editingId = ref(null)
 const showForm = ref(false)
@@ -48,12 +63,42 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    list.value = await fetchSupplierList()
+    const params = {
+      pageNum: query.pageNum,
+      pageSize: query.pageSize,
+    }
+    if (query.supplierName) params.supplierName = query.supplierName
+    if (query.status !== '' && query.status != null) params.status = query.status
+
+    pageResult.value = await fetchSupplierPage(params)
   } catch (e) {
     error.value = e.message || '加载失败'
   } finally {
     loading.value = false
   }
+}
+
+function search() {
+  query.pageNum = 1
+  load()
+}
+
+function resetSearch() {
+  query.supplierName = ''
+  query.status = ''
+  query.pageNum = 1
+  load()
+}
+
+function onPageChange(page) {
+  query.pageNum = page
+  load()
+}
+
+function onPageSizeChange(size) {
+  query.pageSize = size
+  query.pageNum = 1
+  load()
 }
 
 function openCreate() {
@@ -120,7 +165,7 @@ async function submitForm() {
     }
     showForm.value = false
     editingId.value = null
-    await load()
+    search()
   } catch (e) {
     error.value = e.message || '保存失败'
   }
@@ -132,7 +177,7 @@ async function remove(row) {
   try {
     await deleteSupplier(row.id)
     success.value = '已删除'
-    await load()
+    search()
   } catch (e) {
     error.value = e.message || '删除失败'
   }
@@ -164,18 +209,18 @@ function levelBadgeClass(v) {
 }
 
 onMounted(load)
+
+watch(showForm, (val) => {
+  document.body.style.overflow = val ? 'hidden' : ''
+})
 </script>
 
 <template>
   <div class="page portal-supplier">
     <div class="stats">
       <div class="stat">
-        <b>{{ list.length }}</b>
+        <b>{{ pageResult.total }}</b>
         <span>当前供应商数</span>
-      </div>
-      <div class="stat">
-        <b>{{ list.filter((r) => r.status === 3).length }}</b>
-        <span>合作中</span>
       </div>
     </div>
 
@@ -183,7 +228,7 @@ onMounted(load)
       <div class="panel-head">
         <div>
           <h1>供应商列表</h1>
-          <p class="lead">对接 <code>/api/supplier</code> · 编码、联系人、资质与状态</p>
+          <p class="lead">管理供应商编码、联系人、资质与状态信息</p>
         </div>
         <div class="toolbar">
           <button type="button" class="btn" :disabled="loading" @click="load">
@@ -198,79 +243,109 @@ onMounted(load)
       <div v-if="error" class="msg error">{{ error }}</div>
       <div v-if="success" class="msg ok">{{ success }}</div>
 
-      <div v-if="showForm" class="card nested">
-        <h2>{{ isEdit ? '编辑供应商' : '新增供应商' }}</h2>
-        <div class="form-grid">
-          <label class="field">
-            供应商编码 *
-            <input v-model="form.supplierCode" required />
-          </label>
-          <label class="field">
-            供应商名称 *
-            <input v-model="form.supplierName" required />
-          </label>
-          <label class="field">
-            联系人
-            <input v-model="form.contactPerson" />
-          </label>
-          <label class="field">
-            联系电话
-            <input v-model="form.contactPhone" />
-          </label>
-          <label class="field">
-            邮箱
-            <input v-model="form.email" type="email" />
-          </label>
-          <label class="field">
-            所属地区
-            <input v-model="form.region" />
-          </label>
-          <label class="field">
-            主营品类
-            <input v-model="form.mainCategory" />
-          </label>
-          <label class="field">
-            资质等级
-            <select v-model="form.qualificationLevel">
-              <option value="">未选</option>
-              <option value="1">初级</option>
-              <option value="2">中级</option>
-              <option value="3">高级</option>
-            </select>
-          </label>
-          <label class="field">
-            状态
-            <select v-model.number="form.status">
-              <option :value="0">注册</option>
-              <option :value="1">待审核</option>
-              <option :value="2">已准入</option>
-              <option :value="3">合作中</option>
-              <option :value="4">冻结</option>
-              <option :value="5">黑名单</option>
-            </select>
-          </label>
-          <label class="field" style="grid-column: 1 / -1">
-            地址
-            <input v-model="form.address" />
-          </label>
-          <label class="field" style="grid-column: 1 / -1">
-            备注
-            <textarea v-model="form.remark" />
-          </label>
+      <!-- 搜索栏 -->
+      <div class="search-bar">
+        <div class="search-field">
+          <label>供应商名称</label>
+          <input v-model="query.supplierName" placeholder="模糊搜索" @keyup.enter="search" />
         </div>
-        <div class="toolbar" style="margin-top: 0.75rem">
-          <button type="button" class="btn" @click="submitForm">保存</button>
-          <button type="button" class="btn secondary" @click="cancelForm">
-            取消
-          </button>
+        <div class="search-field">
+          <label>状态</label>
+          <select v-model="query.status">
+            <option value="">全部</option>
+            <option :value="0">注册</option>
+            <option :value="1">待审核</option>
+            <option :value="2">已准入</option>
+            <option :value="3">合作中</option>
+            <option :value="4">冻结</option>
+            <option :value="5">黑名单</option>
+          </select>
+        </div>
+        <button type="button" class="btn" @click="search">查询</button>
+        <button type="button" class="btn secondary" @click="resetSearch">重置</button>
+      </div>
+
+      <!-- 弹窗遮罩 -->
+      <Teleport to="body">
+        <div v-if="showForm" class="modal-overlay" @click.self="cancelForm">
+        <div class="modal-dialog">
+          <div class="modal-header">
+            <h2>{{ isEdit ? '编辑供应商' : '新增供应商' }}</h2>
+            <button class="modal-close" @click="cancelForm" title="关闭">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-grid">
+              <label class="field">
+                供应商编码 *
+                <input v-model="form.supplierCode" required />
+              </label>
+              <label class="field">
+                供应商名称 *
+                <input v-model="form.supplierName" required />
+              </label>
+              <label class="field">
+                联系人
+                <input v-model="form.contactPerson" />
+              </label>
+              <label class="field">
+                联系电话
+                <input v-model="form.contactPhone" />
+              </label>
+              <label class="field">
+                邮箱
+                <input v-model="form.email" type="email" />
+              </label>
+              <label class="field">
+                所属地区
+                <input v-model="form.region" />
+              </label>
+              <label class="field">
+                主营品类
+                <input v-model="form.mainCategory" />
+              </label>
+              <label class="field">
+                资质等级
+                <select v-model="form.qualificationLevel">
+                  <option value="">未选</option>
+                  <option value="1">初级</option>
+                  <option value="2">中级</option>
+                  <option value="3">高级</option>
+                </select>
+              </label>
+              <label class="field">
+                状态
+                <select v-model.number="form.status">
+                  <option :value="0">注册</option>
+                  <option :value="1">待审核</option>
+                  <option :value="2">已准入</option>
+                  <option :value="3">合作中</option>
+                  <option :value="4">冻结</option>
+                  <option :value="5">黑名单</option>
+                </select>
+              </label>
+              <label class="field" style="grid-column: 1 / -1">
+                地址
+                <input v-model="form.address" />
+              </label>
+              <label class="field" style="grid-column: 1 / -1">
+                备注
+                <textarea v-model="form.remark" />
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn" @click="submitForm">保存</button>
+            <button type="button" class="btn secondary" @click="cancelForm">取消</button>
+          </div>
         </div>
       </div>
+      </Teleport>
 
       <div v-if="loading" class="loading-block">
         <span class="loading-spinner" aria-hidden="true" />
         正在拉取数据…
       </div>
-      <div v-else-if="list.length === 0" class="empty-state">
+      <div v-else-if="pageResult.records.length === 0" class="empty-state">
         <span class="emoji">📋</span>
         暂无供应商数据，点击「新增供应商」开始录入。
       </div>
@@ -289,7 +364,7 @@ onMounted(load)
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in list" :key="row.id">
+            <tr v-for="row in pageResult.records" :key="row.id">
               <td class="mono">{{ row.supplierCode }}</td>
               <td><strong>{{ row.supplierName }}</strong></td>
               <td>{{ row.contactPerson || '—' }}</td>
@@ -320,6 +395,15 @@ onMounted(load)
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        v-if="pageResult.total > 0"
+        :current="query.pageNum"
+        :total="pageResult.total"
+        :page-size="query.pageSize"
+        @update:page="onPageChange"
+        @update:size="onPageSizeChange"
+      />
     </section>
   </div>
 </template>

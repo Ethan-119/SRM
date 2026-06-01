@@ -19,3 +19,7 @@ export function updateOrder(id, payload) {
 export function deleteOrder(id) {
   return http.delete(`/order/${id}`).then((r) => r.data)
 }
+
+export function fetchOrderPage(params = {}) {
+  return http.get('/order/page', { params }).then((r) => r.data)
+}

@@ -81,6 +81,8 @@ async function onSubmit() {
         <button type="submit" class="btn login-submit" :disabled="loading">
           {{ loading ? '登录中…' : '登录' }}
         </button>
+
+        <p class="login-hint">测试账号：admin / admin123</p>
       </form>
     </div>
   </div>

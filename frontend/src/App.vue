@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { clearAuth, getUsername } from '@/auth/session'
+import { logout as logoutApi } from '@/api/authApi'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,7 +18,8 @@ watch(
   { immediate: true }
 )
 
-function logout() {
+async function logout() {
+  try { await logoutApi() } catch (_) { /* 即使服务端调用失败也清除本地 */ }
   clearAuth()
   router.push('/login')
 }
@@ -31,6 +33,7 @@ function logout() {
         <nav class="app-nav-links">
           <RouterLink to="/supplier">供应商</RouterLink>
           <RouterLink to="/orders">采购订单</RouterLink>
+          <RouterLink to="/agent">智能助手</RouterLink>
         </nav>
         <div class="app-nav-user">
           <span v-if="displayName" class="nav-user-name">{{ displayName }}</span>

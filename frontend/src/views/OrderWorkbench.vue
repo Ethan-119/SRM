@@ -1,12 +1,13 @@
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import {
-  fetchOrderList,
+  fetchOrderPage,
   createOrder,
   updateOrder,
   deleteOrder,
 } from '@/api/orderApi'
 import { fetchSupplierList } from '@/api/supplierApi'
+import Pagination from '@/components/Pagination.vue'
 
 const ORDER_STATUS_MAP = {
   0: '待确认',
@@ -16,11 +17,25 @@ const ORDER_STATUS_MAP = {
   4: '已取消',
 }
 
-const orders = ref([])
 const suppliers = ref([])
 const loading = ref(false)
 const error = ref('')
 const success = ref('')
+
+// --- 分页与筛选 ---
+const query = reactive({
+  pageNum: 1,
+  pageSize: 10,
+  orderNo: '',
+  status: '',
+})
+
+const pageResult = ref({
+  pageNum: 1,
+  pageSize: 10,
+  total: 0,
+  records: [],
+})
 
 const editingId = ref(null)
 const showForm = ref(false)
@@ -65,12 +80,42 @@ async function loadOrders() {
   loading.value = true
   error.value = ''
   try {
-    orders.value = await fetchOrderList()
+    const params = {
+      pageNum: query.pageNum,
+      pageSize: query.pageSize,
+    }
+    if (query.orderNo) params.orderNo = query.orderNo
+    if (query.status !== '' && query.status != null) params.status = query.status
+
+    pageResult.value = await fetchOrderPage(params)
   } catch (e) {
     error.value = e.message || '加载订单失败'
   } finally {
     loading.value = false
   }
+}
+
+function search() {
+  query.pageNum = 1
+  loadOrders()
+}
+
+function resetSearch() {
+  query.orderNo = ''
+  query.status = ''
+  query.pageNum = 1
+  loadOrders()
+}
+
+function onPageChange(page) {
+  query.pageNum = page
+  loadOrders()
+}
+
+function onPageSizeChange(size) {
+  query.pageSize = size
+  query.pageNum = 1
+  loadOrders()
 }
 
 async function loadAll() {
@@ -175,7 +220,7 @@ async function submitForm() {
     }
     showForm.value = false
     editingId.value = null
-    await loadOrders()
+    search()
   } catch (e) {
     error.value = e.message || '保存失败'
   }
@@ -187,7 +232,7 @@ async function remove(row) {
   try {
     await deleteOrder(row.id)
     success.value = '已删除'
-    await loadOrders()
+    search()
   } catch (e) {
     error.value = e.message || '删除失败'
   }
@@ -208,27 +253,25 @@ function orderStatusBadgeClass(v) {
   return map[v] ?? 'badge--slate'
 }
 
-const statPending = computed(
-  () => orders.value.filter((o) => o.status === 0).length
-)
+const totalOrders = computed(() => pageResult.value.total)
 
 onMounted(loadAll)
+
+watch(showForm, (val) => {
+  document.body.style.overflow = val ? 'hidden' : ''
+})
 </script>
 
 <template>
   <div class="page portal-customer">
     <div class="stats">
       <div class="stat">
-        <b>{{ orders.length }}</b>
+        <b>{{ totalOrders }}</b>
         <span>订单总数</span>
       </div>
       <div class="stat">
         <b>{{ suppliers.length }}</b>
         <span>可选供应商</span>
-      </div>
-      <div class="stat">
-        <b>{{ statPending }}</b>
-        <span>待确认</span>
       </div>
     </div>
 
@@ -237,7 +280,7 @@ onMounted(loadAll)
         <div>
           <h1>采购订单</h1>
           <p class="lead">
-            对接 <code>/api/order</code> · 供应商来自 <code>/api/supplier</code>
+            管理采购订单、物料信息与供应商关联
           </p>
         </div>
         <div class="toolbar">
@@ -253,70 +296,99 @@ onMounted(loadAll)
       <div v-if="error" class="msg error">{{ error }}</div>
       <div v-if="success" class="msg ok">{{ success }}</div>
 
-      <div v-if="showForm" class="card nested">
-        <h2>{{ isEdit ? '编辑订单' : '新建订单' }}</h2>
-        <div class="form-grid">
-          <label class="field">
-            订单编号 *
-            <input v-model="form.orderNo" />
-          </label>
-          <label class="field">
-            供应商 *
-            <select v-model="form.supplierId">
-              <option value="">请选择</option>
-              <option v-for="s in suppliers" :key="s.id" :value="String(s.id)">
-                {{ s.supplierName }}（{{ s.supplierCode }}）
-              </option>
-            </select>
-          </label>
-          <label class="field">
-            物料名称 *
-            <input v-model="form.materialName" />
-          </label>
-          <label class="field">
-            采购数量 *
-            <input v-model.number="form.quantity" type="number" min="1" />
-          </label>
-          <label class="field">
-            单价 *
-            <input v-model="form.unitPrice" placeholder="数字" />
-          </label>
-          <label class="field">
-            总金额（可空，默认数量×单价）
-            <input v-model="form.totalAmount" placeholder="留空则自动计算" />
-          </label>
-          <label class="field">
-            交货日期
-            <input v-model="form.deliveryDate" type="date" />
-          </label>
-          <label class="field">
-            状态
-            <select v-model.number="form.status">
-              <option :value="0">待确认</option>
-              <option :value="1">生产中</option>
-              <option :value="2">已发货</option>
-              <option :value="3">已签收</option>
-              <option :value="4">已取消</option>
-            </select>
-          </label>
-          <label class="field" style="grid-column: 1 / -1">
-            备注
-            <textarea v-model="form.remark" />
-          </label>
+      <!-- 搜索栏 -->
+      <div class="search-bar">
+        <div class="search-field">
+          <label>订单编号</label>
+          <input v-model="query.orderNo" placeholder="模糊搜索" @keyup.enter="search" />
         </div>
-        <div class="toolbar" style="margin-top: 0.75rem">
-          <button type="button" class="btn" @click="submitForm">保存</button>
-          <button type="button" class="btn secondary" @click="cancelForm">
-            取消
-          </button>
+        <div class="search-field">
+          <label>状态</label>
+          <select v-model="query.status">
+            <option value="">全部</option>
+            <option :value="0">待确认</option>
+            <option :value="1">生产中</option>
+            <option :value="2">已发货</option>
+            <option :value="3">已签收</option>
+            <option :value="4">已取消</option>
+          </select>
+        </div>
+        <button type="button" class="btn" @click="search">查询</button>
+        <button type="button" class="btn secondary" @click="resetSearch">重置</button>
+      </div>
+
+      <!-- 弹窗遮罩 -->
+      <Teleport to="body">
+        <div v-if="showForm" class="modal-overlay" @click.self="cancelForm">
+        <div class="modal-dialog">
+          <div class="modal-header">
+            <h2>{{ isEdit ? '编辑订单' : '新建订单' }}</h2>
+            <button class="modal-close" @click="cancelForm" title="关闭">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-grid">
+              <label class="field">
+                订单编号 *
+                <input v-model="form.orderNo" />
+              </label>
+              <label class="field">
+                供应商 *
+                <select v-model="form.supplierId">
+                  <option value="">请选择</option>
+                  <option v-for="s in suppliers" :key="s.id" :value="String(s.id)">
+                    {{ s.supplierName }}（{{ s.supplierCode }}）
+                  </option>
+                </select>
+              </label>
+              <label class="field">
+                物料名称 *
+                <input v-model="form.materialName" />
+              </label>
+              <label class="field">
+                采购数量 *
+                <input v-model.number="form.quantity" type="number" min="1" />
+              </label>
+              <label class="field">
+                单价 *
+                <input v-model="form.unitPrice" placeholder="数字" />
+              </label>
+              <label class="field">
+                总金额（可空，默认数量×单价）
+                <input v-model="form.totalAmount" placeholder="留空则自动计算" />
+              </label>
+              <label class="field">
+                交货日期
+                <input v-model="form.deliveryDate" type="date" />
+              </label>
+              <label class="field">
+                状态
+                <select v-model.number="form.status">
+                  <option :value="0">待确认</option>
+                  <option :value="1">生产中</option>
+                  <option :value="2">已发货</option>
+                  <option :value="3">已签收</option>
+                  <option :value="4">已取消</option>
+                </select>
+              </label>
+              <label class="field" style="grid-column: 1 / -1">
+                备注
+                <textarea v-model="form.remark" />
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn" @click="submitForm">保存</button>
+            <button type="button" class="btn secondary" @click="cancelForm">取消</button>
+          </div>
         </div>
       </div>
+      </Teleport>
 
       <div v-if="loading" class="loading-block">
         <span class="loading-spinner" aria-hidden="true" />
         正在拉取订单…
       </div>
-      <div v-else-if="orders.length === 0" class="empty-state">
+      <div v-else-if="pageResult.records.length === 0" class="empty-state">
         <span class="emoji">🛒</span>
         暂无订单，点击「新建订单」创建一笔采购。
       </div>
@@ -336,7 +408,7 @@ onMounted(loadAll)
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in orders" :key="row.id">
+            <tr v-for="row in pageResult.records" :key="row.id">
               <td class="mono">{{ row.orderNo }}</td>
               <td>{{ supplierLabel(row.supplierId) }}</td>
               <td><strong>{{ row.materialName }}</strong></td>
@@ -361,6 +433,15 @@ onMounted(loadAll)
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        v-if="pageResult.total > 0"
+        :current="query.pageNum"
+        :total="pageResult.total"
+        :page-size="query.pageSize"
+        @update:page="onPageChange"
+        @update:size="onPageSizeChange"
+      />
     </section>
   </div>
 </template>
