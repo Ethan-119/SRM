@@ -1,7 +1,7 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/srm?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false
-    username: root
+    url: jdbc:postgresql://localhost:5432/SRM
+    username: postgres
     password: 123456
 
   data:
