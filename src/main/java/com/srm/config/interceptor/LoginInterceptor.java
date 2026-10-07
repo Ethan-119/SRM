@@ -6,7 +6,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -18,9 +17,6 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     private final StringRedisTemplate stringRedisTemplate;
 
-    @Value("${srm.agent.api-key:}")
-    private String internalApiKey;
-
     public LoginInterceptor(StringRedisTemplate stringRedisTemplate) {
         this.stringRedisTemplate = stringRedisTemplate;
     }
@@ -29,12 +25,6 @@ public class LoginInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         // OPTIONS 预检请求直接放行
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
-            return true;
-        }
-
-        // 内部服务调用：检查 X-Api-Key 头
-        String apiKey = request.getHeader("X-Api-Key");
-        if (internalApiKey != null && !internalApiKey.isEmpty() && internalApiKey.equals(apiKey)) {
             return true;
         }
 

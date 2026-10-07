@@ -43,7 +43,7 @@ spring:
       api-key: ${DASHSCOPE_API_KEY:}
       chat:
         options:
-          model: ${AI_CHAT_MODEL:qwen3-flash}
+          model: ${AI_CHAT_MODEL:qwen3.7-flash}
       embedding:
         options:
           model: ${AI_EMBEDDING_MODEL:text-embedding-v4}
@@ -60,7 +60,6 @@ mybatis-plus:
 
 srm:
   agent:
-    api-key: srm-agent-internal-key-2026
     # Redis 短期记忆窗口（最近 N 条消息），长期记忆在 PG srm_agent_message 表
     history-window: ${AGENT_HISTORY_WINDOW:20}
   neo4j:
