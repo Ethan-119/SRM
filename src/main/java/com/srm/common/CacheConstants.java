@@ -52,4 +52,7 @@ public final class CacheConstants {
 
     /** 字典类型互斥锁 — 防缓存击穿 */
     public static final String LOCK_DICT_TYPE = "srm:lock:dict:type:";
+
+    /** Agent 会话历史 — Redis 短期窗口（LIST），长期记忆在 PG srm_agent_message 表 */
+    public static final String AGENT_HISTORY_KEY = "srm:agent:history:";
 }
