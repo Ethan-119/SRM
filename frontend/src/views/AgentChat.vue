@@ -1,6 +1,7 @@
 <script setup>
 import { ref, nextTick, onMounted, computed } from 'vue'
 import { sendMessageStream, fetchHistory, clearHistory } from '@/api/agentApi'
+import EChart from '@/components/EChart.vue'
 
 const SESSIONS_KEY = 'srm_agent_sessions'
 const ACTIVE_KEY = 'srm_agent_active_session'
@@ -43,10 +44,13 @@ async function loadHistoryFor(sessionId) {
   if (!sessionId) return
   try {
     const list = await fetchHistory(sessionId)
-    messages.value = (Array.isArray(list) ? list : []).map((m) => ({
-      role: m.role,
-      content: m.content,
-    }))
+    messages.value = (Array.isArray(list) ? list : []).map((m) => {
+      if (m.role === 'assistant') {
+        const parsed = parseCharts(m.content)
+        return { role: m.role, content: parsed.text, charts: parsed.charts }
+      }
+      return { role: m.role, content: m.content }
+    })
     scrollBottom()
   } catch (e) {
     console.warn('加载对话历史失败:', e.message || e)
@@ -126,8 +130,12 @@ async function send() {
       }
     }
     aiMsg.streaming = false
-    // 如果流式结束后没有收到任何内容，显示提示
-    if (!aiMsg.content) {
+    // 流式结束后解析图表块，分离正文与图表
+    const parsed = parseCharts(aiMsg.content)
+    aiMsg.content = parsed.text
+    aiMsg.charts = parsed.charts
+    // 如果正文和图表都没有，显示提示
+    if (!aiMsg.content && (!aiMsg.charts || aiMsg.charts.length === 0)) {
       aiMsg.content = '抱歉，AI 助手未生成回复，请稍后重试或换个方式提问。'
       aiMsg.error = true
     }
@@ -152,6 +160,131 @@ function renderMarkdown(text) {
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\n/g, '<br>')
     .replace(/^- (.+)$/gm, '· $1')
+}
+
+// 从回复中解析 ```chart 围栏块，返回 { text, charts }
+function parseCharts(content) {
+  const charts = []
+  let text = content || ''
+  text = text.replace(/```chart\s*([\s\S]*?)```/g, (_, json) => {
+    try {
+      const spec = JSON.parse(json.trim())
+      if (spec && typeof spec === 'object') charts.push(spec)
+    } catch { /* 忽略非法 JSON */ }
+    return ''
+  })
+  return { text: text.trim(), charts }
+}
+
+// 流式渲染时隐藏图表块（含未闭合的围栏）
+function stripChartBlocks(text) {
+  if (!text) return ''
+  return text
+    .replace(/```chart\s*[\s\S]*?```/g, '')
+    .replace(/```chart[\s\S]*$/g, '')
+}
+
+// 将语义化的图表 spec 转换为 ECharts option
+function buildChartOption(spec) {
+  if (!spec || !spec.type) return {}
+  switch (spec.type) {
+    case 'gauge': {
+      const max = Number(spec.max) || 1
+      return {
+        backgroundColor: 'transparent',
+        series: [
+          {
+            type: 'gauge',
+            min: Number(spec.min) || 0,
+            max,
+            startAngle: 210,
+            endAngle: -30,
+            radius: '95%',
+            axisLine: { lineStyle: { width: 14, color: [[1, '#7aa2d1']] } },
+            pointer: { show: false },
+            axisTick: { show: false },
+            splitLine: { show: false },
+            axisLabel: { show: false },
+            detail: {
+              valueAnimation: true,
+              fontSize: 28,
+              color: '#e2e8f0',
+              formatter: (x) => (max <= 1 ? (x * 100).toFixed(1) + '%' : x.toFixed(0)),
+              offsetCenter: [0, '0%'],
+            },
+            data: [{ value: Number(spec.value) || 0, name: spec.name || '' }],
+          },
+        ],
+      }
+    }
+    case 'radar': {
+      const indicators = (spec.indicators || []).map((n) => ({ name: n, max: 100 }))
+      return {
+        backgroundColor: 'transparent',
+        radar: {
+          indicator: indicators,
+          radius: '62%',
+          splitNumber: 4,
+          axisName: { color: '#94a3b8' },
+          splitLine: { lineStyle: { color: 'rgba(148,163,184,0.2)' } },
+          splitArea: { areaStyle: { color: ['rgba(122,162,209,0.02)', 'rgba(122,162,209,0.06)'] } },
+          axisLine: { lineStyle: { color: 'rgba(148,163,184,0.2)' } },
+        },
+        series: [
+          {
+            type: 'radar',
+            data: (spec.series || []).map((s) => ({
+              value: s.values || [],
+              name: s.name || '',
+              areaStyle: { color: 'rgba(122,162,209,0.25)' },
+              lineStyle: { color: '#7aa2d1', width: 2 },
+              itemStyle: { color: '#7aa2d1' },
+            })),
+          },
+        ],
+      }
+    }
+    case 'bar': {
+      const palette = ['#7aa2d1', '#8b9bb0', '#6fb58f', '#c6a15f', '#d27486']
+      return {
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'axis' },
+        legend: { top: 0, textStyle: { color: '#94a3b8' } },
+        grid: { left: 50, right: 20, top: 36, bottom: 40 },
+        xAxis: { type: 'category', data: spec.categories || [], axisLabel: { color: '#94a3b8', interval: 0 } },
+        yAxis: {
+          type: 'value',
+          axisLabel: { color: '#94a3b8' },
+          splitLine: { lineStyle: { color: 'rgba(148,163,184,0.15)' } },
+        },
+        series: (spec.series || []).map((s, i) => ({
+          name: s.name,
+          type: 'bar',
+          data: s.values || [],
+          itemStyle: { color: palette[i % palette.length], borderRadius: [4, 4, 0, 0] },
+        })),
+      }
+    }
+    case 'pie': {
+      return {
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'item' },
+        legend: { bottom: 0, textStyle: { color: '#94a3b8' } },
+        series: [
+          {
+            type: 'pie',
+            radius: ['42%', '68%'],
+            center: ['50%', '46%'],
+            data: (spec.data || []).map((d) => ({ name: d.name, value: d.value })),
+            label: { color: '#94a3b8' },
+            itemStyle: { borderColor: '#101318', borderWidth: 2 },
+          },
+        ],
+      }
+    }
+    default:
+      return {}
+  }
 }
 
 function onKeydown(e) {
@@ -223,6 +356,7 @@ onMounted(() => {
               <li>查询物料历史价格</li>
               <li>计算采购成本与阶梯折扣</li>
               <li>了解供应商/订单状态流转规则</li>
+              <li>智能分析（集中度风险、供应商评分、采购画像）</li>
             </ul>
           </div>
 
@@ -234,7 +368,15 @@ onMounted(() => {
           >
             <div class="chat-msg-bubble">
               <span class="chat-msg-role">{{ msg.role === 'user' ? '你' : 'AI' }}</span>
-              <div v-if="msg.role === 'assistant'" v-html="renderMarkdown(msg.content) || (msg.streaming ? '思考中…' : '')" />
+              <div v-if="msg.role === 'assistant'">
+                <div v-html="renderMarkdown(msg.streaming ? stripChartBlocks(msg.content) : msg.content) || (msg.streaming ? '思考中…' : '')" />
+                <div v-if="!msg.streaming && msg.charts && msg.charts.length" class="chat-charts">
+                  <div v-for="(c, ci) in msg.charts" :key="ci" class="chat-chart">
+                    <div class="chat-chart-title">{{ c.title }}</div>
+                    <EChart :option="buildChartOption(c)" height="240px" />
+                  </div>
+                </div>
+              </div>
               <div v-else>{{ msg.content }}</div>
             </div>
           </div>
@@ -330,7 +472,7 @@ onMounted(() => {
 .session-item.active {
   color: var(--text);
   border-left-color: var(--accent);
-  background: rgba(56,189,248,0.08);
+  background: rgba(122,162,209,0.08);
 }
 .session-label {
   flex: 1;
@@ -411,8 +553,8 @@ onMounted(() => {
 }
 
 .chat-msg.user .chat-msg-bubble {
-  background: rgba(56,189,248,0.15);
-  border: 1px solid rgba(56,189,248,0.25);
+  background: rgba(122,162,209,0.15);
+  border: 1px solid rgba(122,162,209,0.25);
   border-bottom-right-radius: 3px;
 }
 .chat-msg:not(.user) .chat-msg-bubble {
@@ -424,6 +566,25 @@ onMounted(() => {
   background: var(--danger-bg);
   border-color: rgba(251,113,133,0.35);
   color: #fecdd3;
+}
+
+.chat-charts {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.chat-chart {
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.chat-chart-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
 }
 
 .chat-input-bar {
@@ -447,8 +608,8 @@ onMounted(() => {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .chat-input-bar textarea:focus {
-  border-color: rgba(56,189,248,0.55);
-  box-shadow: 0 0 0 3px rgba(56,189,248,0.12);
+  border-color: rgba(122,162,209,0.55);
+  box-shadow: 0 0 0 3px rgba(122,162,209,0.12);
 }
 .chat-input-bar .btn { align-self: flex-end; white-space: nowrap; }
 

@@ -263,7 +263,7 @@ watch(showForm, (val) => {
 </script>
 
 <template>
-  <div class="page portal-customer">
+  <div class="page">
     <div class="stats">
       <div class="stat">
         <b>{{ totalOrders }}</b>

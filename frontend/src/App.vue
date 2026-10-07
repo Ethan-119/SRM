@@ -34,6 +34,7 @@ async function logout() {
           <RouterLink to="/supplier">供应商</RouterLink>
           <RouterLink to="/orders">采购订单</RouterLink>
           <RouterLink to="/agent">智能助手</RouterLink>
+          <RouterLink to="/analytics">智能分析</RouterLink>
         </nav>
         <div class="app-nav-user">
           <span v-if="displayName" class="nav-user-name">{{ displayName }}</span>

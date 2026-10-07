@@ -32,6 +32,12 @@ const router = createRouter({
       component: () => import('@/views/AgentChat.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/analytics',
+      name: 'analytics',
+      component: () => import('@/views/AnalyticsDashboard.vue'),
+      meta: { requiresAuth: true },
+    },
   ],
 })
 
