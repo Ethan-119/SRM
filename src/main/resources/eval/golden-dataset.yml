@@ -1,0 +1,33 @@
+# ============================================
+# SRM 混合检索 RAG - 黄金标准数据集
+# 字段：id / question / expectedDocIds / expectedAnswerContains / tags / difficulty
+# 文档 ID 与 RagDataInitializer 灌入的 doc id 对齐，内容对应真实供应商与真实价格。
+# ============================================
+
+- id: "EVAL-001"
+  question: "哪家供应商的冷轧钢板价格最低且资质有效？"
+  expectedDocIds: ["supplier-2-冷轧钢板", "supplier-23-冷轧钢板"]
+  expectedAnswerContains: ["上海宝钢", "8500", "资质有效"]
+  tags: ["价格查询", "资质过滤"]
+  difficulty: "easy"
+
+- id: "EVAL-002"
+  question: "钢材供应商中有没有关联企业？"
+  expectedDocIds: ["supplier-2", "supplier-15", "supplier-39"]
+  expectedAnswerContains: ["上海宝钢", "关联"]
+  tags: ["关联风险", "图谱推理"]
+  difficulty: "hard"
+
+- id: "EVAL-003"
+  question: "华东地区有哪些已准入的电子元器件供应商？"
+  expectedDocIds: ["supplier-24-STM32"]
+  expectedAnswerContains: ["无锡华润", "华东", "STM32"]
+  tags: ["供应商检索", "地区过滤"]
+  difficulty: "medium"
+
+- id: "EVAL-004"
+  question: "不锈钢板的历史成交均价是多少？"
+  expectedDocIds: ["order-不锈钢板-avg"]
+  expectedAnswerContains: ["18500", "均价"]
+  tags: ["价格查询"]
+  difficulty: "easy"
