@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 @Data
-public class AgentChatRequest {
+public class AgentChatDTO {
 
     /** 用户问题 */
     private String query;

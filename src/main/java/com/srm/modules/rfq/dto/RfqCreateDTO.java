@@ -12,7 +12,7 @@ import java.util.List;
  * 创建询比价单请求。
  */
 @Data
-public class RfqCreateRequest {
+public class RfqCreateDTO {
 
     @NotBlank(message = "物料名称不能为空")
     private String materialName;

@@ -9,7 +9,7 @@ import java.math.BigDecimal;
  * 供应商报价请求。
  */
 @Data
-public class QuoteSubmitRequest {
+public class QuoteSubmitDTO {
 
     @NotNull(message = "询比价单ID不能为空")
     private Long rfqId;

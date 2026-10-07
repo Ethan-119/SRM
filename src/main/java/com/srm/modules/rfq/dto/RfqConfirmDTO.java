@@ -6,7 +6,7 @@ import lombok.Data;
  * 采购员确认/驳回请求。
  */
 @Data
-public class RfqConfirmRequest {
+public class RfqConfirmDTO {
 
     /** 确认人（采购经理）ID */
     private Long managerId;

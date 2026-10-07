@@ -2,9 +2,9 @@ package com.srm.modules.rfq.controller;
 
 import cn.hutool.json.JSONUtil;
 import com.srm.common.Result;
-import com.srm.modules.rfq.dto.QuoteSubmitRequest;
-import com.srm.modules.rfq.dto.RfqConfirmRequest;
-import com.srm.modules.rfq.dto.RfqCreateRequest;
+import com.srm.modules.rfq.dto.QuoteSubmitDTO;
+import com.srm.modules.rfq.dto.RfqConfirmDTO;
+import com.srm.modules.rfq.dto.RfqCreateDTO;
 import com.srm.modules.rfq.entity.RfqWorkflow;
 import com.srm.modules.rfq.service.RfqWorkflowService;
 import com.srm.modules.rfq.vo.AiAnalysisResult;
@@ -28,7 +28,7 @@ public class RfqWorkflowController {
 
     @Operation(summary = "创建询比价单")
     @PostMapping
-    public Result<RfqWorkflowVO> create(@Valid @RequestBody RfqCreateRequest req) {
+    public Result<RfqWorkflowVO> create(@Valid @RequestBody RfqCreateDTO req) {
         int hours = (req.getQuoteHours() == null || req.getQuoteHours() <= 0) ? 24 : req.getQuoteHours();
         RfqWorkflow rfq = rfqService.createRfq(req.getMaterialName(), req.getQuantity(),
                 req.getSupplierIds(), hours);
@@ -37,7 +37,7 @@ public class RfqWorkflowController {
 
     @Operation(summary = "供应商报价")
     @PostMapping("/quote")
-    public Result<Void> quote(@Valid @RequestBody QuoteSubmitRequest req) {
+    public Result<Void> quote(@Valid @RequestBody QuoteSubmitDTO req) {
         rfqService.submitQuote(req.getRfqId(), req.getSupplierId(), req.getPrice(),
                 req.getTaxRate(), req.getDeliveryDays());
         return Result.ok();
@@ -45,7 +45,7 @@ public class RfqWorkflowController {
 
     @Operation(summary = "采购员确认/驳回")
     @PostMapping("/{id}/confirm")
-    public Result<Long> confirm(@PathVariable Long id, @RequestBody RfqConfirmRequest req) {
+    public Result<Long> confirm(@PathVariable Long id, @RequestBody RfqConfirmDTO req) {
         Long orderId = rfqService.confirmRfq(id, req.getManagerId(), req.isApproved(), req.getComment());
         return Result.ok(orderId);
     }

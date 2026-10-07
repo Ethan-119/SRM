@@ -2,7 +2,7 @@ package com.srm.modules.agent.controller;
 
 import cn.hutool.json.JSONUtil;
 import com.srm.common.Result;
-import com.srm.modules.agent.dto.AgentChatRequest;
+import com.srm.modules.agent.dto.AgentChatDTO;
 import com.srm.modules.agent.dto.ChatMessage;
 import com.srm.modules.agent.service.AgentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,13 +32,13 @@ public class AgentController {
 
     @Operation(summary = "智能采购对话（非流式）")
     @PostMapping("/chat")
-    public Result<String> chat(@RequestBody AgentChatRequest request) {
+    public Result<String> chat(@RequestBody AgentChatDTO request) {
         return Result.ok(agentService.chat(request.getQuery(), request.getSessionId()));
     }
 
     @Operation(summary = "智能采购对话（SSE流式）")
     @PostMapping("/chat/stream")
-    public void chatStream(@RequestBody AgentChatRequest request, HttpServletResponse response) throws IOException {
+    public void chatStream(@RequestBody AgentChatDTO request, HttpServletResponse response) throws IOException {
         response.setContentType("text/event-stream");
         response.setCharacterEncoding("UTF-8");
         response.setHeader("Cache-Control", "no-cache");
