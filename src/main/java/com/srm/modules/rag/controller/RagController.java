@@ -1,14 +1,15 @@
 package com.srm.modules.rag.controller;
 
 import com.srm.common.Result;
+import com.srm.config.RabbitMqConfig;
 import com.srm.modules.rag.dto.RagDocumentDTO;
 import com.srm.modules.rag.service.HybridRagService;
-import com.srm.modules.rag.service.RagDocumentService;
 import com.srm.modules.rag.vo.VectorDocument;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,7 +24,7 @@ import java.util.List;
 public class RagController {
 
     private final HybridRagService hybridRagService;
-    private final RagDocumentService ragDocumentService;
+    private final RabbitTemplate rabbitTemplate;
 
     @Operation(summary = "混合检索（向量 + 图谱结构化过滤）")
     @GetMapping("/search")
@@ -32,14 +33,14 @@ public class RagController {
         return Result.ok(hybridRagService.retrieve(query, topK));
     }
 
-    @Operation(summary = "写入/更新一条向量文档")
+    @Operation(summary = "提交文档向量化任务（异步）")
     @PostMapping("/documents")
     public Result<Void> addDocument(@Valid @RequestBody RagDocumentDTO dto) {
-        ragDocumentService.add(dto.getId(), dto.getTitle(), dto.getContent(), dto.getSource(), dto.getMetadata());
+        rabbitTemplate.convertAndSend(RabbitMqConfig.RAG_DOCUMENT_QUEUE, dto);
         return Result.ok();
     }
 
-    @Operation(summary = "批量写入/更新向量文档")
+    @Operation(summary = "批量提交文档向量化任务（异步）")
     @PostMapping("/documents/batch")
     public Result<Integer> addDocuments(@RequestBody List<RagDocumentDTO> docs) {
         int count = 0;
@@ -48,7 +49,7 @@ public class RagController {
                     || dto.getContent() == null || dto.getContent().isBlank()) {
                 continue;
             }
-            ragDocumentService.add(dto.getId(), dto.getTitle(), dto.getContent(), dto.getSource(), dto.getMetadata());
+            rabbitTemplate.convertAndSend(RabbitMqConfig.RAG_DOCUMENT_QUEUE, dto);
             count++;
         }
         return Result.ok(count);

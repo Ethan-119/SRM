@@ -267,13 +267,13 @@ Java 后端内嵌 Spring AI（OpenAI 协议兼容 DashScope 通义千问），�
 
 `RagEvalRunner.run` 同步遍历黄金数据集，每条用例串行执行：向量检索 + Neo4j 过滤 + 2 次 LLM 调用（答案生成 + 忠实度裁判）。数据量大时非常慢，且会阻塞 HTTP 请求线程。
 
-**规划**：接入 RabbitMQ 异步化 —— 提交评测任务 → MQ → 后台 worker 逐条评测 → 完成后落库 + 通知。
+**状态**：✅ 已实现（RabbitMQ 异步）—— 提交任务 → MQ → `RagEvalListener` 后台评测 → 回写 `srm_rag_eval_run.status`（PENDING/RUNNING/COMPLETED/FAILED）。
 
 ### 2. 知识库文档写入同步
 
 `POST /api/rag/documents` 同步调用 embedding API 逐条向量化，大批量导入慢。
 
-**规划**：同样走异步队列批量向量化。
+**状态**：✅ 已实现（RabbitMQ 异步）—— 文档写入走 `RagDocumentListener` 后台向量化。
 
 ### 3. 供应商评分维度不完整
 

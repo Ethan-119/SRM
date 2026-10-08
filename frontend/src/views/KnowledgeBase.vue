@@ -40,7 +40,7 @@ async function submitDocument() {
   saveMsg.value = null
   try {
     await addRagDocument({ id: docId.value.trim(), content: docContent.value, metadata })
-    saveMsg.value = { type: 'ok', text: `已写入文档「${docId.value.trim()}」` }
+    saveMsg.value = { type: 'ok', text: `已提交「${docId.value.trim()}」，后台异步向量化中` }
     docId.value = ''
     docContent.value = ''
     docMetadata.value = ''
@@ -71,7 +71,7 @@ async function submitBatch() {
   batchMsg.value = null
   try {
     const count = await batchAddRagDocuments(docs)
-    batchMsg.value = { type: 'ok', text: `已批量写入 ${count} 条文档` }
+    batchMsg.value = { type: 'ok', text: `已提交 ${count} 条文档，后台异步向量化中` }
     batchText.value = ''
   } catch (e) {
     batchMsg.value = { type: 'error', text: e.message || '批量写入失败' }

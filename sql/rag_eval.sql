@@ -10,6 +10,7 @@ CREATE TABLE srm_rag_eval_run (
     run_no           VARCHAR(64)   NOT NULL,
     dataset          VARCHAR(255),
     top_k            INTEGER,
+    status           VARCHAR(32)   DEFAULT 'PENDING',
     total_cases      INTEGER,
     avg_recall       NUMERIC(10,6),
     avg_precision    NUMERIC(10,6),
@@ -34,6 +35,7 @@ COMMENT ON COLUMN srm_rag_eval_run.id IS '主键 ID';
 COMMENT ON COLUMN srm_rag_eval_run.run_no IS '批次号';
 COMMENT ON COLUMN srm_rag_eval_run.dataset IS '数据集来源';
 COMMENT ON COLUMN srm_rag_eval_run.top_k IS '评测 K 值';
+COMMENT ON COLUMN srm_rag_eval_run.status IS '状态: PENDING-排队中 RUNNING-执行中 COMPLETED-已完成 FAILED-失败';
 COMMENT ON COLUMN srm_rag_eval_run.total_cases IS '用例总数';
 COMMENT ON COLUMN srm_rag_eval_run.avg_recall IS '平均召回率 Recall@K';
 COMMENT ON COLUMN srm_rag_eval_run.avg_precision IS '平均精确率 Precision@K';

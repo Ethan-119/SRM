@@ -22,6 +22,9 @@ public class RagEvalRun extends BaseEntity {
     /** 评测 K 值 */
     private Integer topK;
 
+    /** 状态: PENDING-排队中 RUNNING-执行中 COMPLETED-已完成 FAILED-失败 */
+    private String status;
+
     /** 用例总数 */
     private Integer totalCases;
 

@@ -97,6 +97,12 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!-- RabbitMQ（异步评测 / 异步文档向量化） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
         <!-- Redisson (方案B: 纯 redisson，不用 starter，手动配置) -->
         <dependency>
             <groupId>org.redisson</groupId>

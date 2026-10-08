@@ -34,6 +34,12 @@ spring:
           max-idle: 8
           min-idle: 0
 
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
   ai:
     openai:
       # DashScope 兼容 OpenAI 协议
