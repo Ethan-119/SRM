@@ -24,11 +24,11 @@ async function onSubmit() {
   }
   loading.value = true
   try {
-    const { token, username: name } = await loginApi(
+    const { token, username: name, isAdmin } = await loginApi(
       username.value,
       password.value
     )
-    setAuth(token, name)
+    setAuth(token, name, isAdmin)
     const redir = route.query.redirect
     const safe =
       typeof redir === 'string' &&

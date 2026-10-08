@@ -31,6 +31,9 @@ public class EvalResult {
     /** NDCG@K */
     private Double ndcgAtK;
 
+    /** 答案准确率（0~1，命中 expectedAnswerContains 关键词比例；未启用时为 null） */
+    private Double accuracy;
+
     /** 检索延迟（毫秒） */
     private Long latencyMs;
 

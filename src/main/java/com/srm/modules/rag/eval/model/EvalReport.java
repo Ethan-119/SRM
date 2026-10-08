@@ -26,6 +26,9 @@ public class EvalReport {
     /** 平均 NDCG@K */
     private Double avgNdcgAtK;
 
+    /** 平均答案准确率（可空） */
+    private Double avgAccuracy;
+
     /** 检索延迟 P50（毫秒） */
     private Double latencyP50;
 

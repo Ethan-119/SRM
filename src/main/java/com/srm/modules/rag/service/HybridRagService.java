@@ -28,7 +28,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class HybridRagService {
 
-    private final PgVectorStoreService pgVectorStoreService;
+    private final RagDocumentService ragDocumentService;
     private final GraphRepository graphRepository;
 
     @Value("${srm.pgvector.top-k:20}")
@@ -41,7 +41,7 @@ public class HybridRagService {
 
     public List<VectorDocument> retrieve(String query, int topK) {
         // 1. 向量检索 Top-N
-        List<VectorDocument> candidates = pgVectorStoreService.search(query, vectorTopK);
+        List<VectorDocument> candidates = ragDocumentService.search(query, vectorTopK);
         if (candidates.isEmpty()) {
             return List.of();
         }

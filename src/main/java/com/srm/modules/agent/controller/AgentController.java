@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 内生智能采购助手（Spring AI 内嵌），替代原 Python Agent HTTP 透传。
@@ -73,7 +74,7 @@ public class AgentController {
     }
 
     private String sseContent(String chunk) {
-        return "{\"content\": " + JSONUtil.toJsonStr(chunk) + "}";
+        return JSONUtil.toJsonStr(Map.of("content", chunk));
     }
 
     private void writeError(ServletOutputStream out) {

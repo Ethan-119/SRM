@@ -8,8 +8,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 用 LLM 判断答案忠实度（可选）。
- * 判断「回答」是否忠实于检索到的「上下文」，未编造事实。
+ * 忠实度评估器：用 LLM 当裁判，判断「回答」是否忠实于检索到的「上下文」。
+ *
+ * <p>忠实度衡量回答有没有编造（幻觉）——回答中的事实都应能在上下文中找到依据。
+ * 返回 0~1 之间的分数，1 表示完全忠实，0 表示完全偏离。</p>
  */
 @Service
 @RequiredArgsConstructor

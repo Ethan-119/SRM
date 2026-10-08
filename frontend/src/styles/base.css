@@ -385,6 +385,36 @@ table.data tbody tr:hover {
   font-size: 0.78rem;
 }
 
+/* —— 聊天 markdown 表格 —— */
+.md-table-wrap {
+  overflow-x: auto;
+  margin: 0.5rem 0;
+  border-radius: var(--radius-sm);
+}
+
+.md-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.82rem;
+}
+
+.md-table th,
+.md-table td {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+
+.md-table th {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.md-table td {
+  color: var(--text);
+}
+
 /* —— 徽章 —— */
 .badge {
   display: inline-flex;

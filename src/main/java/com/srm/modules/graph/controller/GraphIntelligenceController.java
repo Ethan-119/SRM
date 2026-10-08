@@ -2,6 +2,7 @@ package com.srm.modules.graph.controller;
 
 import com.srm.common.Result;
 import com.srm.modules.graph.service.GraphIntelligenceService;
+import com.srm.modules.graph.service.Neo4jSyncService;
 import com.srm.modules.graph.service.SupplierScoreService;
 import com.srm.modules.graph.vo.AlternativeSupplierVO;
 import com.srm.modules.graph.vo.BuyerProfileVO;
@@ -26,6 +27,7 @@ public class GraphIntelligenceController {
 
     private final GraphIntelligenceService graphIntelligenceService;
     private final SupplierScoreService supplierScoreService;
+    private final Neo4jSyncService neo4jSyncService;
 
     @Operation(summary = "供应链集中度风险（赫芬达尔指数）")
     @GetMapping("/concentration")
@@ -56,5 +58,11 @@ public class GraphIntelligenceController {
     @GetMapping("/buyer-profile/{userId}")
     public Result<BuyerProfileVO> buyerProfile(@PathVariable Long userId) {
         return Result.ok(graphIntelligenceService.buildBuyerProfile(userId));
+    }
+
+    @Operation(summary = "同步业务库数据到 Neo4j 图谱")
+    @PostMapping("/sync")
+    public Result<java.util.Map<String, Integer>> sync() {
+        return Result.ok(neo4jSyncService.syncAll());
     }
 }

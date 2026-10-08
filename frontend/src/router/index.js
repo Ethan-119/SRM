@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getToken } from '@/auth/session'
+import { getToken, getIsAdmin } from '@/auth/session'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -38,6 +38,12 @@ const router = createRouter({
       component: () => import('@/views/AnalyticsDashboard.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/knowledge',
+      name: 'knowledge',
+      component: () => import('@/views/KnowledgeBase.vue'),
+      meta: { requiresAuth: true, adminOnly: true },
+    },
   ],
 })
 
@@ -55,6 +61,10 @@ router.beforeEach((to, _from, next) => {
       path: '/login',
       query: { redirect: to.fullPath },
     })
+    return
+  }
+  if (to.meta.adminOnly && !getIsAdmin()) {
+    next({ path: '/supplier' })
     return
   }
   next()

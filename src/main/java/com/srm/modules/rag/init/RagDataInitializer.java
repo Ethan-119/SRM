@@ -1,6 +1,6 @@
 package com.srm.modules.rag.init;
 
-import com.srm.modules.rag.service.PgVectorStoreService;
+import com.srm.modules.rag.service.RagDocumentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -11,11 +11,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * RAG 向量库一次性灌库器。
+ * RAG 文档一次性灌库器。
  *
  * <p>仅在 {@code srm.rag.ingest-on-startup=true} 时启动执行，把演示文档
- * （供应商资料 / 物料价格）向量化后写入 pgvector 的 {@code vector_store} 表。
- * 写入幂等（{@link PgVectorStoreService#add} 使用 {@code ON CONFLICT DO UPDATE}）。</p>
+ * （供应商资料 / 物料价格）写入：主数据表 {@code rag_document} + 向量索引 {@code vector_store}。
+ * 写入幂等（{@link RagDocumentService#add} 内部对主数据和向量均做 upsert）。</p>
  *
  * <p>运行方式：{@code --srm.rag.ingest-on-startup=true}。</p>
  *
@@ -29,13 +29,13 @@ import java.util.Map;
 @ConditionalOnProperty(name = "srm.rag.ingest-on-startup", havingValue = "true")
 public class RagDataInitializer implements CommandLineRunner {
 
-    private final PgVectorStoreService pgVectorStoreService;
+    private final RagDocumentService ragDocumentService;
 
     @Override
     public void run(String... args) {
         log.info("开始灌入 RAG 向量演示文档，共 {} 条", DOCS.size());
         for (Doc doc : DOCS) {
-            pgVectorStoreService.add(doc.id(), doc.content(), doc.metadata());
+            ragDocumentService.add(doc.id(), null, doc.content(), null, doc.metadata());
             log.info("已写入文档: {}", doc.id());
         }
         log.info("RAG 向量灌库完成");

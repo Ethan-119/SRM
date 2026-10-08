@@ -152,14 +152,67 @@ async function send() {
 
 function renderMarkdown(text) {
   if (!text) return ''
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+  const lines = text.split('\n')
+  const blocks = []
+  let i = 0
+  while (i < lines.length) {
+    // 识别 markdown 表格：当前行是表格行，且下一行是分隔行
+    if (isTableRow(lines[i]) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      const tableLines = []
+      while (i < lines.length && isTableRow(lines[i])) {
+        tableLines.push(lines[i])
+        i++
+      }
+      blocks.push(renderTable(tableLines))
+    } else {
+      blocks.push(renderInline(lines[i]))
+      i++
+    }
+  }
+  return blocks.join('<br>')
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+// 行内渲染：转义 + 加粗 + 行内代码 + 无序列表（- 或 *）
+function renderInline(s) {
+  let r = escapeHtml(s)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br>')
-    .replace(/^- (.+)$/gm, '· $1')
+  r = r.replace(/^\s*[-*]\s+(.+)$/, '· $1')
+  return r
+}
+
+function isTableRow(line) {
+  return line.trim().startsWith('|')
+}
+
+function isTableSeparator(line) {
+  if (!line.includes('-')) return false
+  const cells = line.split('|').map((c) => c.trim()).filter((c) => c !== '')
+  return cells.length > 0 && cells.every((c) => /^:?-{3,}:?$/.test(c))
+}
+
+function renderTable(lines) {
+  const header = splitRow(lines[0])
+  const dataRows = lines.slice(2).map(splitRow)
+  const thead = header.map((h) => `<th>${renderInline(h)}</th>`).join('')
+  const tbody = dataRows
+    .map((row) => {
+      const tds = header.map((_, idx) => `<td>${renderInline(row[idx] ?? '')}</td>`).join('')
+      return `<tr>${tds}</tr>`
+    })
+    .join('')
+  return `<div class="md-table-wrap"><table class="md-table"><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>`
+}
+
+function splitRow(line) {
+  let s = line.trim()
+  if (s.startsWith('|')) s = s.slice(1)
+  if (s.endsWith('|')) s = s.slice(0, -1)
+  return s.split('|').map((c) => c.trim())
 }
 
 // 从回复中解析 ```chart 围栏块，返回 { text, charts }

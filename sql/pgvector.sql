@@ -1,19 +1,15 @@
 -- ============================================
--- SRM 混合检索 RAG - pgvector 向量库初始化脚本（PostgreSQL）
--- 在 srm_vector 库中执行（与业务库 srm 分开）：
---   createdb srm_vector
---   psql -d srm_vector -f sql/pgvector.sql
+-- SRM 混合检索 RAG - pgvector 向量索引（只存向量，不含正文）
+-- 文档正文在 rag_document 主数据表（业务库）。
 -- ============================================
 
 -- 1. 启用向量扩展（需超级用户或具备 CREATE EXTENSION 权限）
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- 2. 向量存储表
+-- 2. 向量索引表：doc_id 指向 rag_document.id，embedding 存向量
 CREATE TABLE IF NOT EXISTS vector_store (
-    id        TEXT PRIMARY KEY,
-    content   TEXT NOT NULL,
-    metadata  JSONB DEFAULT '{}'::jsonb,
-    embedding vector(1024)
+    doc_id     TEXT PRIMARY KEY,
+    embedding  vector(1024)
 );
 
 -- 3. 余弦相似度检索索引（与代码中的 embedding <=> ?::vector 一致）

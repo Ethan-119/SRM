@@ -1,5 +1,6 @@
 package com.srm.modules.graph.repository;
 
+import lombok.extern.slf4j.Slf4j;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.Record;
 import org.neo4j.driver.Session;
@@ -13,6 +14,7 @@ import java.util.Map;
 /**
  * Cypher 查询执行器。所有图谱查询统一经过这里，避免在各 Service 中散落 Session 管理代码。
  */
+@Slf4j
 @Repository
 public class GraphRepository {
 
@@ -29,6 +31,7 @@ public class GraphRepository {
      * 执行只读 Cypher 查询，返回记录列表。
      */
     public List<Record> query(String cypher, Map<String, Object> params) {
+        log.info("[Neo4j] 查询 Cypher: {}\n[Neo4j] 参数: {}", cypher.strip(), params);
         try (Session session = session()) {
             return session.executeRead(tx -> tx.run(cypher, params).list());
         }
@@ -45,6 +48,7 @@ public class GraphRepository {
      * 执行写 Cypher（CREATE/MERGE/SET/DELETE），不返回结果。
      */
     public void write(String cypher, Map<String, Object> params) {
+        log.info("[Neo4j] 写入 Cypher: {}\n[Neo4j] 参数: {}", cypher.strip(), params);
         try (Session session = session()) {
             session.executeWrite(tx -> {
                 tx.run(cypher, params).consume();

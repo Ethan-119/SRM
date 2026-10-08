@@ -294,7 +294,7 @@ onMounted(() => {
         <div class="search-bar">
           <div class="search-field">
             <label>供应商ID</label>
-            <input v-model="scoreSupplierId" placeholder="如：1001" @keyup.enter="loadScore" />
+            <input v-model="scoreSupplierId" placeholder="如：2（上海宝钢）" @keyup.enter="loadScore" />
           </div>
           <button type="button" class="btn" :disabled="scoreLoading" @click="loadScore">
             分析
@@ -378,7 +378,7 @@ onMounted(() => {
         <div class="search-bar">
           <div class="search-field">
             <label>供应商ID</label>
-            <input v-model="riskSupplierId" placeholder="如：1003" @keyup.enter="loadRisk" />
+            <input v-model="riskSupplierId" placeholder="如：2（上海宝钢）" @keyup.enter="loadRisk" />
           </div>
           <button type="button" class="btn" :disabled="riskLoading" @click="loadRisk">
             分析

@@ -53,4 +53,10 @@ public class JwtUtil {
     public static Long getUserId(String token) {
         return Long.valueOf(parse(token).getSubject());
     }
+
+    /** 从 Token 中获取是否管理员（1-管理员 0-普通员工） */
+    public static Integer getIsAdmin(String token) {
+        Object isAdmin = parse(token).get("isAdmin");
+        return isAdmin == null ? null : Integer.valueOf(isAdmin.toString());
+    }
 }

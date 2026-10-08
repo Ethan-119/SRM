@@ -61,6 +61,23 @@ public class LoginInterceptor implements HandlerInterceptor {
             return false;
         }
 
+        // 3. 管理员权限校验（知识库等管理功能）
+        if (isAdminRequired(request.getRequestURI())) {
+            Integer isAdmin = JwtUtil.getIsAdmin(token);
+            if (isAdmin == null || isAdmin != 1) {
+                log.warn("用户 {} 无管理员权限，拒绝访问: {}", userId, request.getRequestURI());
+                response.setContentType("application/json;charset=UTF-8");
+                response.setStatus(403);
+                response.getWriter().write("{\"code\":403,\"message\":\"无权限，仅管理员可操作\"}");
+                return false;
+            }
+        }
+
         return true;
+    }
+
+    /** 需要管理员权限的路径（知识库管理） */
+    private boolean isAdminRequired(String uri) {
+        return uri != null && uri.startsWith("/api/rag/");
     }
 }

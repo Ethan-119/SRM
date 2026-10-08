@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { clearAuth, getUsername } from '@/auth/session'
+import { clearAuth, getUsername, getIsAdmin } from '@/auth/session'
 import { logout as logoutApi } from '@/api/authApi'
 
 const route = useRoute()
@@ -10,10 +10,12 @@ const router = useRouter()
 const showShell = computed(() => route.meta.requiresAuth === true)
 
 const displayName = ref('')
+const isAdmin = ref(false)
 watch(
   () => route.fullPath,
   () => {
     displayName.value = getUsername() || ''
+    isAdmin.value = getIsAdmin()
   },
   { immediate: true }
 )
@@ -35,6 +37,7 @@ async function logout() {
           <RouterLink to="/orders">采购订单</RouterLink>
           <RouterLink to="/agent">智能助手</RouterLink>
           <RouterLink to="/analytics">智能分析</RouterLink>
+          <RouterLink v-if="isAdmin" to="/knowledge">知识库</RouterLink>
         </nav>
         <div class="app-nav-user">
           <span v-if="displayName" class="nav-user-name">{{ displayName }}</span>

@@ -20,7 +20,8 @@ export async function login(username, password) {
   }
   const name =
     raw.username ?? raw.userName ?? raw.name ?? raw.loginName ?? username.trim()
-  return { token: String(token), username: String(name) }
+  const isAdmin = Number(raw.isAdmin ?? raw.is_admin ?? 0)
+  return { token: String(token), username: String(name), isAdmin }
 }
 
 /** POST /api/auth/logout — 清除服务端 Redis Token */

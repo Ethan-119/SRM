@@ -67,6 +67,8 @@ srm:
     username: ${NEO4J_USERNAME:neo4j}
     password: ${NEO4J_PASSWORD:neo4j123456}
     database: ${NEO4J_DATABASE:neo4j}
+    # 启动时自动把业务库同步到图谱（默认关闭，需 Neo4j 已启动）
+    sync-on-startup: ${NEO4J_SYNC_ON_STARTUP:false}
   pgvector:
     url: ${PGVECTOR_URL:jdbc:postgresql://localhost:5432/SRM}
     username: ${PGVECTOR_USERNAME:postgres}
@@ -74,6 +76,9 @@ srm:
     table: ${PGVECTOR_TABLE:vector_store}
     dimension: ${PGVECTOR_DIMENSION:1024}
     top-k: ${PGVECTOR_TOPK:20}
+  rag:
+    # 启动时是否把演示文档向量化灌入 pgvector（一次性灌库，幂等；默认关闭，设 true 后启动即灌入）
+    ingest-on-startup: ${RAG_INGEST_ON_STARTUP:false}
 
 # Knife4j
 springdoc:

@@ -34,7 +34,8 @@ class RagMetricsCalculatorTest {
         List<String> retrieved = List.of("x", "a", "b");
         Set<String> expected = Set.of("a", "b", "c");
         double ndcg = RagMetricsCalculator.ndcgAtK(retrieved, expected, 3);
-        assertEquals(0.5, ndcg, 1e-9); // 命中第 2、3 位
+        // DCG = 1/log2(3) + 1/log2(4)；IDCG = 1 + 1/log2(3) + 1/log2(4)
+        assertEquals(0.5307212739772434, ndcg, 1e-9);
     }
 
     @Test
