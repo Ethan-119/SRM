@@ -1,6 +1,6 @@
 # SRM 供应商管理系统
 
-> 企业级 SRM（供应商关系管理）系统，基于 Spring Boot 3.5 + Vue 3 前后端分离架构，覆盖供应商全生命周期管理与采购订单闭环协同，并集成基于 LangChain + 大模型的 AI 智能采购 Agent，支持流式对话与询比价分析。
+> 企业级 SRM（供应商关系管理）系统，基于 Spring Boot 3.5 + Vue 3 前后端分离架构，覆盖供应商全生命周期管理与采购订单闭环协同，并集成基于 Spring AI + 通义千问（DashScope）的 AI 智能采购 Agent，支持流式对话、询比价分析、图谱智能分析（Neo4j）与 RAG 混合检索（pgvector）。
 
 ---
 
@@ -35,9 +35,12 @@
 | **后端框架** | Spring Boot                 | 3.5.0           |
 | **前端框架** | Vue 3 + Vue Router          | 3.5.x / 4.5.x   |
 | **构建工具** | Maven / Vite                | — / 6.x         |
-| **持久层**   | MyBatis-Plus + MySQL        | 3.5.10 / 8.0    |
+| **持久层**   | MyBatis-Plus + PostgreSQL   | 3.5.10 / 16.x   |
 | **缓存**     | Redis (Lettuce) + Redisson  | 7.x / 3.45.0    |
 | **安全**     | JWT (jjwt) + BCrypt         | 0.12.6 / 0.10.2 |
+| **AI 框架**  | Spring AI（OpenAI 协议）    | 1.0.0           |
+| **向量库**   | pgvector                    | 0.7.x           |
+| **图数据库** | Neo4j                       | 5.x             |
 | **API 文档** | Knife4j (OpenAPI 3)         | 4.5.0           |
 | **工具库**   | Hutool + Lombok             | 5.8.35 / latest |
 | **反向代理** | Nginx                       | 1.30.x          |
@@ -206,23 +209,101 @@ hikari:
 - BCrypt 密码加密（at.favre.lib）
 - 登录拦截器 + 前端路由守卫
 
-### 5. AI 智能采购 Agent
+### 5. AI 智能采购 Agent（Spring AI 内嵌）
 
-独立的 Python 服务（FastAPI + LangChain + 通义千问），Java 后端通过 `AgentProxyController` 透传请求。提供 7 个采购领域工具：
+Java 后端内嵌 Spring AI（OpenAI 协议兼容 DashScope 通义千问），直接调用 Java 业务服务作为工具，替代早期 Python Agent 透传。提供 4 组工具：
 
-| 工具                        | 功能                                             |
-| --------------------------- | ------------------------------------------------ |
-| `search_supplier_knowledge` | 基于 RAG 的供应商知识库检索（ChromaDB 向量存储） |
-| `search_suppliers`          | 按地区、品类或关键词搜索供应商                   |
-| `get_price_reference`       | 通过历史订单获取物料价格参考                     |
-| `calculate_total_cost`      | 计算含阶梯折扣的采购总成本                       |
-| `compare_supplier_quotes`   | 多供应商询比价：聚合最优价格、排序排名与推荐     |
-| `get_supplier_status_flow`  | 返回供应商状态机流转规则                         |
-| `get_order_status_flow`     | 返回订单状态机流转规则                           |
+| 工具组               | 功能                                             |
+| -------------------- | ------------------------------------------------ |
+| `SupplierTools`      | 供应商检索、关联风险穿透                          |
+| `PriceTools`         | 物料历史价格、采购成本计算                        |
+| `StatusFlowTools`    | 供应商 / 订单状态流转规则                         |
+| `GraphAnalysisTools` | 集中度风险、替代供应商、综合评分、采购员画像      |
 
 - 支持 SSE 流式输出，前端实时渲染对话
-- 对话记忆基于 SQLite，按 session 隔离多会话
-- ReAct 推理循环，最多 3 次工具调用尝试
+- 对话记忆：Redis 短期窗口（最近 N 条）+ PostgreSQL `srm_agent_message` 长期记忆，按 session 隔离
+- 通过 `defaultTools` 自动注册 `@Tool` 注解方法，由 LLM 决策调用工具
+
+### 6. 图谱智能分析（Neo4j）
+
+基于 Neo4j 存储实体关系（Supplier / Material / Cert / Region 节点 + SUPPLIES / SUBSIDIARY_OF / CERTIFIED_WITH 等关系），业务库通过 `Neo4jSyncService` 同步到图谱。
+
+- 供应商综合评分（价格 35% / 质量 25% / 交期 20% / 服务 10% / 风险 10%）
+- 供应链集中度风险（HHI 赫芬达尔指数）
+- 关联风险穿透（股权/股东/高管多层穿透）
+- 替代供应商发现、采购员画像、资质到期预警
+
+### 7. RAG 混合检索（pgvector + Neo4j）
+
+三层存储架构：
+
+| 层               | 存储            | 内容                               |
+| ---------------- | --------------- | ---------------------------------- |
+| PostgreSQL 业务库 | `rag_document`  | 文档主数据（id/title/content/source/metadata） |
+| pgvector         | `vector_store`  | 只存 doc_id + embedding            |
+| Neo4j            | 节点 + 关系     | 供应商/物料/资质/组织关系          |
+
+- 写入：`RagDocumentService.add` → 先落主数据，再写向量索引
+- 检索：`HybridRagService.retrieve` → 向量召回 + Neo4j 结构化过滤（仅保留「已准入/合作中」且无过期资质）
+
+### 8. RAG 评测（召回率 / 忠实度）
+
+`POST /api/rag/eval/run?k=5` 触发，加载 `eval/golden-dataset.yml` 黄金数据集，逐条评测并落库。
+
+- 检索指标：Recall@K / Precision@K / MRR / NDCG@K（`RagMetricsCalculator`）
+- 生成指标：答案准确率（关键词命中）+ 忠实度（`LlmJudgeService` LLM 裁判）
+- 结果落库：`srm_rag_eval_run`（批次聚合）+ `srm_rag_eval_result`（用例明细）
+
+### 9. 知识库管理（前端 + 管理员权限）
+
+- 前端「知识库」页面：单条 / 批量导入文档、检索验证
+- 管理员权限：`is_admin=1` 才显示页面；后端 `/api/rag/**` 由 `LoginInterceptor` 校验 `isAdmin`，非管理员返回 403
+
+---
+
+## 已知不足与后续规划
+
+### 1. RAG 评测同步执行（性能瓶颈）
+
+`RagEvalRunner.run` 同步遍历黄金数据集，每条用例串行执行：向量检索 + Neo4j 过滤 + 2 次 LLM 调用（答案生成 + 忠实度裁判）。数据量大时非常慢，且会阻塞 HTTP 请求线程。
+
+**规划**：接入 RabbitMQ 异步化 —— 提交评测任务 → MQ → 后台 worker 逐条评测 → 完成后落库 + 通知。
+
+### 2. 知识库文档写入同步
+
+`POST /api/rag/documents` 同步调用 embedding API 逐条向量化，大批量导入慢。
+
+**规划**：同样走异步队列批量向量化。
+
+### 3. 供应商评分维度不完整
+
+`SupplierScoreService` 的质量分用「信用等级」代理、服务分固定 80，尚未接入真实数据（检验合格率、退货率、准时交货率、服务响应）。
+
+**规划**：接入真实业务数据源后替换代理指标。
+
+### 4. pgvector 与业务库同库
+
+`srm.pgvector.url` 默认指向业务库 `SRM`，未按原计划拆分独立 `srm_vector` 库。
+
+**规划**：拆库，或明确同库策略。
+
+### 5. 忠实度评测依赖 LLM 裁判
+
+忠实度由 LLM 打分，有 token 成本、延迟和随机性，结果可能不稳定。
+
+**规划**：引入更确定的推理一致性 / n-gram 校验作为补充指标。
+
+### 6. 文档主数据 upsert 非原子
+
+`RagDocumentService.add` 用 selectById + insert/updateById 两步，非原子操作。
+
+**规划**：改用 `ON CONFLICT DO UPDATE` 原生 upsert。
+
+### 7. 全局异常处理不精细
+
+`GlobalExceptionHandler` 把 404（NoResourceFoundException）等兜底成 500「系统繁忙」，有误导性。
+
+**规划**：补 404 / 400 等细分处理。
 
 ---
 
@@ -244,7 +325,10 @@ SRM/
 ├── sql/                          # 数据库脚本
 │   ├── init.sql                  # 建表 + 初始字典 + 默认管理员
 │   ├── test_data.sql             # 测试数据
-│   └── test_data_extra.sql       # 补充测试数据
+│   ├── test_data_extra.sql       # 补充测试数据
+│   ├── pgvector.sql              # pgvector 向量索引表
+│   ├── rag_document.sql          # RAG 文档主数据表
+│   └── rag_eval.sql              # RAG 评测结果表
 ├── src/main/java/com/srm/
 │   ├── SrmApplication.java       # 启动类
 │   ├── common/                   # 公共组件
@@ -271,29 +355,25 @@ SRM/
 │       ├── supplier/             # 供应商模块
 │       ├── system/               # 字典管理模块
 │       ├── user/                 # 用户认证模块
-│       └── agent/                # AI Agent 代理模块（透传 Python Agent 服务）
-│           ├── controller/       # AgentProxyController
-│           └── dto/              # AgentChatRequest
+│       ├── agent/                # AI Agent 模块（Spring AI + 工具）
+│       │   ├── controller/       # AgentController（SSE 流式对话）
+│       │   ├── service/          # AgentService / ChatHistoryService
+│       │   └── tools/            # SupplierTools / PriceTools / GraphAnalysisTools 等
+│       ├── graph/                # 图谱智能分析（Neo4j）
+│       │   ├── controller/       # GraphIntelligenceController
+│       │   ├── repository/       # GraphRepository / Neo4jSupplierRepository
+│       │   └── service/          # GraphIntelligenceService / SupplierScoreService
+│       ├── rag/                  # RAG 混合检索 + 评测
+│       │   ├── controller/       # RagController / RagEvalController
+│       │   ├── service/          # RagDocumentService / HybridRagService / PgVectorStoreService
+│       │   └── eval/             # RagEvalRunner / RagMetricsCalculator / LlmJudgeService
+│       ├── rfq/                  # 询价(RFQ)工作流
+│       ├── cert/                 # 资质(cert)续期
+│       └── notification/         # 通知(notification)
 ├── src/main/resources/
 │   ├── application.yml           # 主配置
-│   ├── application-dev.yml       # 开发环境
-│   ├── application-prod.yml      # 生产环境
+│   ├── eval/                     # RAG 评测黄金数据集 (golden-dataset.yml)
 │   └── mapper/                   # MyBatis XML 映射
-│       ├── order/OrderMapper.xml
-│       └── supplier/SupplierMapper.xml
-├── agent/                        # Python AI Agent 服务（FastAPI + LangChain）
-│   └── SRM_agent/
-│       ├── app.py                # FastAPI 入口
-│       ├── tools/                # LangChain 工具（7个采购领域工具）
-│       ├── model/                # LLM 模型工厂
-│       ├── memory/               # 对话记忆服务（SQLite）
-│       ├── rag/                  # RAG 检索模块
-│       ├── rag_eval/             # RAG 评估模块
-│       ├── config/               # YAML 配置
-│       ├── prompts/              # 提示词模板
-│       ├── chroma_db/            # ChromaDB 向量存储
-│       ├── data/                 # 知识库文档
-│       └── requirements.txt      # Python 依赖
 ├── frontend/                     # Vue 3 前端
 │   └── src/
 │       ├── api/                  # Axios 接口封装
@@ -304,7 +384,9 @@ SRM/
 │       │   ├── Login.vue
 │       │   ├── SupplierWorkbench.vue
 │       │   ├── OrderWorkbench.vue
-│       │   └── AgentChat.vue
+│       │   ├── AgentChat.vue
+│       │   ├── AnalyticsDashboard.vue
+│       │   └── KnowledgeBase.vue
 │       ├── styles/               # 全局样式
 │       ├── App.vue
 │       └── main.js
