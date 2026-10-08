@@ -34,6 +34,25 @@ CREATE INDEX idx_region ON srm_supplier (region);
 CREATE INDEX idx_status ON srm_supplier (status);
 CREATE INDEX idx_is_deleted ON srm_supplier (is_deleted);
 
+COMMENT ON TABLE  srm_supplier IS '供应商';
+COMMENT ON COLUMN srm_supplier.id IS '主键 ID';
+COMMENT ON COLUMN srm_supplier.supplier_code IS '供应商编码';
+COMMENT ON COLUMN srm_supplier.supplier_name IS '供应商名称';
+COMMENT ON COLUMN srm_supplier.contact_person IS '联系人';
+COMMENT ON COLUMN srm_supplier.contact_phone IS '联系电话';
+COMMENT ON COLUMN srm_supplier.email IS '邮箱';
+COMMENT ON COLUMN srm_supplier.region IS '所属地区';
+COMMENT ON COLUMN srm_supplier.main_category IS '主营品类';
+COMMENT ON COLUMN srm_supplier.qualification_level IS '资质等级: 1-初级 2-中级 3-高级';
+COMMENT ON COLUMN srm_supplier.status IS '状态: 0-注册 1-待审核 2-已准入 3-合作中 4-冻结 5-黑名单';
+COMMENT ON COLUMN srm_supplier.address IS '地址';
+COMMENT ON COLUMN srm_supplier.remark IS '备注';
+COMMENT ON COLUMN srm_supplier.create_time IS '创建时间';
+COMMENT ON COLUMN srm_supplier.update_time IS '更新时间';
+COMMENT ON COLUMN srm_supplier.create_by IS '创建人 ID';
+COMMENT ON COLUMN srm_supplier.update_by IS '更新人 ID';
+COMMENT ON COLUMN srm_supplier.is_deleted IS '逻辑删除: 0-否 1-是';
+
 
 -- ============================================
 -- 2. 采购订单表
@@ -64,6 +83,24 @@ CREATE INDEX idx_status ON srm_purchase_order (status);
 CREATE INDEX idx_delivery_date ON srm_purchase_order (delivery_date);
 CREATE INDEX idx_is_deleted ON srm_purchase_order (is_deleted);
 
+COMMENT ON TABLE  srm_purchase_order IS '采购订单';
+COMMENT ON COLUMN srm_purchase_order.id IS '主键 ID';
+COMMENT ON COLUMN srm_purchase_order.order_no IS '订单号';
+COMMENT ON COLUMN srm_purchase_order.supplier_id IS '供应商 ID';
+COMMENT ON COLUMN srm_purchase_order.material_name IS '物料名称';
+COMMENT ON COLUMN srm_purchase_order.quantity IS '数量';
+COMMENT ON COLUMN srm_purchase_order.unit_price IS '单价';
+COMMENT ON COLUMN srm_purchase_order.total_amount IS '总金额';
+COMMENT ON COLUMN srm_purchase_order.delivery_date IS '交货日期';
+COMMENT ON COLUMN srm_purchase_order.status IS '状态: 0-待确认 1-生产中 2-已发货 3-已签收 4-已取消';
+COMMENT ON COLUMN srm_purchase_order.received_time IS '签收时间';
+COMMENT ON COLUMN srm_purchase_order.remark IS '备注';
+COMMENT ON COLUMN srm_purchase_order.create_time IS '创建时间';
+COMMENT ON COLUMN srm_purchase_order.update_time IS '更新时间';
+COMMENT ON COLUMN srm_purchase_order.create_by IS '创建人 ID';
+COMMENT ON COLUMN srm_purchase_order.update_by IS '更新人 ID';
+COMMENT ON COLUMN srm_purchase_order.is_deleted IS '逻辑删除: 0-否 1-是';
+
 
 -- ============================================
 -- 3. 字典项表
@@ -86,6 +123,20 @@ CREATE TABLE srm_dict_item (
 );
 CREATE INDEX idx_dict_type ON srm_dict_item (dict_type);
 CREATE INDEX idx_is_deleted ON srm_dict_item (is_deleted);
+
+COMMENT ON TABLE  srm_dict_item IS '字典项';
+COMMENT ON COLUMN srm_dict_item.id IS '主键 ID';
+COMMENT ON COLUMN srm_dict_item.dict_type IS '字典类型';
+COMMENT ON COLUMN srm_dict_item.label IS '显示标签';
+COMMENT ON COLUMN srm_dict_item.value IS '值';
+COMMENT ON COLUMN srm_dict_item.sort IS '排序';
+COMMENT ON COLUMN srm_dict_item.status IS '状态: 0-禁用 1-启用';
+COMMENT ON COLUMN srm_dict_item.remark IS '备注';
+COMMENT ON COLUMN srm_dict_item.create_time IS '创建时间';
+COMMENT ON COLUMN srm_dict_item.update_time IS '更新时间';
+COMMENT ON COLUMN srm_dict_item.create_by IS '创建人 ID';
+COMMENT ON COLUMN srm_dict_item.update_by IS '更新人 ID';
+COMMENT ON COLUMN srm_dict_item.is_deleted IS '逻辑删除: 0-否 1-是';
 
 
 -- ============================================
@@ -151,6 +202,22 @@ CREATE TABLE srm_user (
 CREATE INDEX idx_is_admin ON srm_user (is_admin);
 CREATE INDEX idx_is_deleted ON srm_user (is_deleted);
 
+COMMENT ON TABLE  srm_user IS '管理端用户（内部采购人员）';
+COMMENT ON COLUMN srm_user.id IS '主键 ID';
+COMMENT ON COLUMN srm_user.username IS '用户名（登录账号）';
+COMMENT ON COLUMN srm_user.password IS '密码（BCrypt 加密）';
+COMMENT ON COLUMN srm_user.real_name IS '真实姓名';
+COMMENT ON COLUMN srm_user.email IS '邮箱';
+COMMENT ON COLUMN srm_user.phone IS '联系电话';
+COMMENT ON COLUMN srm_user.department IS '所属部门';
+COMMENT ON COLUMN srm_user.is_admin IS '是否管理员: 0-普通员工 1-管理员';
+COMMENT ON COLUMN srm_user.status IS '状态: 0-禁用 1-启用';
+COMMENT ON COLUMN srm_user.create_time IS '创建时间';
+COMMENT ON COLUMN srm_user.update_time IS '更新时间';
+COMMENT ON COLUMN srm_user.create_by IS '创建人 ID';
+COMMENT ON COLUMN srm_user.update_by IS '更新人 ID';
+COMMENT ON COLUMN srm_user.is_deleted IS '逻辑删除: 0-否 1-是';
+
 -- 初始管理员账号: admin / admin123
 INSERT INTO srm_user (id, username, password, real_name, email, phone, department, is_admin, status, create_time, update_time, is_deleted) VALUES
 (1, 'admin', '$2a$12$5l9GyFv.f.lvYUOpL/nGp.49NswXTiarB/mJLQTpU2DTH8eGfYAFq', '系统管理员', 'admin@srm.com', NULL, '采购部', 1, 1, now(), now(), 0);
@@ -169,3 +236,10 @@ CREATE TABLE srm_agent_message (
     CONSTRAINT pk_srm_agent_message PRIMARY KEY (id)
 );
 CREATE INDEX idx_agent_msg_session ON srm_agent_message (session_id, id);
+
+COMMENT ON TABLE  srm_agent_message IS 'AI 会话历史消息（长期记忆）';
+COMMENT ON COLUMN srm_agent_message.id IS '主键 ID';
+COMMENT ON COLUMN srm_agent_message.session_id IS '会话 ID';
+COMMENT ON COLUMN srm_agent_message.role IS '角色: user / assistant';
+COMMENT ON COLUMN srm_agent_message.content IS '消息内容';
+COMMENT ON COLUMN srm_agent_message.create_time IS '创建时间';

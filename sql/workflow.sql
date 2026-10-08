@@ -28,3 +28,22 @@ CREATE TABLE srm_rfq_workflow (
 CREATE INDEX idx_status ON srm_rfq_workflow (status);
 CREATE INDEX idx_deadline ON srm_rfq_workflow (quote_deadline);
 CREATE INDEX idx_is_deleted ON srm_rfq_workflow (is_deleted);
+
+COMMENT ON TABLE  srm_rfq_workflow IS '询比价(RFQ)工作流';
+COMMENT ON COLUMN srm_rfq_workflow.id IS '主键 ID';
+COMMENT ON COLUMN srm_rfq_workflow.rfq_no IS '询价单号';
+COMMENT ON COLUMN srm_rfq_workflow.material_name IS '物料名称';
+COMMENT ON COLUMN srm_rfq_workflow.quantity IS '采购数量';
+COMMENT ON COLUMN srm_rfq_workflow.supplier_ids IS '候选供应商 ID 列表（JSON 数组）';
+COMMENT ON COLUMN srm_rfq_workflow.quotes IS '报价记录（JSON 数组）';
+COMMENT ON COLUMN srm_rfq_workflow.ai_analysis IS 'AI 分析结果（JSON）';
+COMMENT ON COLUMN srm_rfq_workflow.status IS '状态（QUOTING/SCORING/RECOMMENDED/CONFIRMED 等）';
+COMMENT ON COLUMN srm_rfq_workflow.quote_deadline IS '报价截止时间';
+COMMENT ON COLUMN srm_rfq_workflow.confirm_by IS '定标确认人 ID';
+COMMENT ON COLUMN srm_rfq_workflow.confirm_time IS '定标确认时间';
+COMMENT ON COLUMN srm_rfq_workflow.order_id IS '关联采购订单 ID';
+COMMENT ON COLUMN srm_rfq_workflow.create_time IS '创建时间';
+COMMENT ON COLUMN srm_rfq_workflow.update_time IS '更新时间';
+COMMENT ON COLUMN srm_rfq_workflow.create_by IS '创建人 ID';
+COMMENT ON COLUMN srm_rfq_workflow.update_by IS '更新人 ID';
+COMMENT ON COLUMN srm_rfq_workflow.is_deleted IS '逻辑删除: 0-否 1-是';
