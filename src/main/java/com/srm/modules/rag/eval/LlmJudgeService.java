@@ -46,7 +46,7 @@ public class LlmJudgeService {
         if (!m.find()) {
             return 0.0;
         }
-        double v = Double.parseDouble(m.group(1));
+        double v = Double.parseDouble(m.group());
         if (v > 1.0) {
             v = v / 100.0; // 兼容 0~100 的输出
         }
