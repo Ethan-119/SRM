@@ -14,3 +14,12 @@ export function addRagDocument(doc) {
 export function batchAddRagDocuments(docs) {
   return http.post('/rag/documents/batch', docs).then((r) => r.data)
 }
+
+/** 上传文件（PDF/Word/CSV/TXT/MD），后端解析后异步向量化 */
+export function uploadRagDocuments(files) {
+  const fd = new FormData()
+  for (const f of files) {
+    fd.append('files', f)
+  }
+  return http.post('/rag/documents/upload', fd).then((r) => r.data)
+}

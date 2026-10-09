@@ -7,6 +7,11 @@ spring:
   application:
     name: srm
 
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 60MB
+
   datasource:
     driver-class-name: org.postgresql.Driver
     url: jdbc:postgresql://localhost:5432/SRM
@@ -85,6 +90,8 @@ srm:
   rag:
     # 启动时是否把演示文档向量化灌入 pgvector（一次性灌库，幂等；默认关闭，设 true 后启动即灌入）
     ingest-on-startup: ${RAG_INGEST_ON_STARTUP:false}
+    # 文件导入时，单块文本的最大字符数（超长文本按段落/句子边界切分）
+    chunk-size: ${RAG_CHUNK_SIZE:800}
 
 # Knife4j
 springdoc:

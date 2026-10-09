@@ -1,6 +1,12 @@
 <script setup>
 import { ref } from 'vue'
-import { searchRag, addRagDocument, batchAddRagDocuments } from '@/api/ragApi'
+import { searchRag, addRagDocument, batchAddRagDocuments, uploadRagDocuments } from '@/api/ragApi'
+
+// —— 文件导入 ——
+const fileInput = ref(null)
+const uploadFiles = ref([])
+const uploading = ref(false)
+const uploadMsg = ref(null)
 
 // —— 补充文档 ——
 const docId = ref('')
@@ -21,6 +27,36 @@ const searching = ref(false)
 const searched = ref(false)
 const searchError = ref('')
 const results = ref([])
+
+function onFileChange(e) {
+  uploadFiles.value = Array.from(e.target.files || [])
+}
+
+async function submitUpload() {
+  if (uploadFiles.value.length === 0) {
+    uploadMsg.value = { type: 'error', text: '请先选择要上传的文件' }
+    return
+  }
+  uploading.value = true
+  uploadMsg.value = null
+  try {
+    const results = await uploadRagDocuments(uploadFiles.value)
+    const ok = (results || []).filter((r) => r.chunks > 0)
+    const failed = (results || []).filter((r) => r.chunks === 0)
+    const total = ok.reduce((s, r) => s + r.chunks, 0)
+    let text = `已提交 ${total} 个文本块（${ok.length} 个文件），后台异步向量化中`
+    if (failed.length) {
+      text += `；${failed.length} 个文件失败`
+    }
+    uploadMsg.value = { type: failed.length ? 'error' : 'ok', text }
+    uploadFiles.value = []
+    if (fileInput.value) fileInput.value.value = ''
+  } catch (e) {
+    uploadMsg.value = { type: 'error', text: e.message || '上传失败' }
+  } finally {
+    uploading.value = false
+  }
+}
 
 async function submitDocument() {
   if (!docId.value.trim() || !docContent.value.trim()) {
@@ -108,6 +144,35 @@ function formatSimilarity(v) {
         <p class="lead">手动补充 RAG 知识库：把文档片段写入 pgvector，并验证向量检索召回效果。</p>
       </div>
     </div>
+
+    <!-- 文件导入 -->
+    <section class="panel">
+      <h2>文件导入</h2>
+      <p class="lead" style="margin: -0.4rem 0 0.9rem; font-size: 0.85rem; color: var(--muted)">
+        上传 PDF / Word(.docx) / CSV / TXT / MD 文件，后端解析正文后自动切块并向量化写入知识库。
+      </p>
+      <label class="field">
+        <span>选择文件（可多选）</span>
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          accept=".pdf,.docx,.csv,.txt,.md"
+          @change="onFileChange"
+        />
+      </label>
+      <div v-if="uploadFiles.length" class="toolbar" style="margin-top: 0.6rem">
+        <span v-for="(f, i) in uploadFiles" :key="i" class="badge badge--slate">{{ f.name }}</span>
+      </div>
+      <div class="toolbar" style="margin-top: 0.85rem">
+        <button class="btn" :disabled="uploading" @click="submitUpload">
+          {{ uploading ? '解析并向量化中…' : '上传并向量化' }}
+        </button>
+      </div>
+      <div v-if="uploadMsg" class="msg" :class="uploadMsg.type" style="margin-top: 0.85rem; margin-bottom: 0">
+        {{ uploadMsg.text }}
+      </div>
+    </section>
 
     <!-- 补充文档 -->
     <section class="panel">
