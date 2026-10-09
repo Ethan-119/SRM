@@ -1,6 +1,7 @@
 package com.srm.modules.cert.service;
 
 import com.srm.modules.graph.repository.Neo4jSupplierRepository;
+import com.srm.modules.graph.service.Neo4jSyncService;
 import com.srm.modules.graph.vo.CertExpiryAlert;
 import com.srm.modules.notification.service.NotificationService;
 import com.srm.modules.supplier.entity.Supplier;
@@ -18,7 +19,7 @@ import java.util.List;
  * 供应商资质到期自动续期工作流。
  *
  * 定时扫描即将到期资质 → 通知供应商 → 供应商上传新资质 → AI 自动审核
- * → 更新图谱 → 到期未续期自动冻结。
+ * → 写 PG 并同步图谱 → 到期未续期自动冻结。
  */
 @Slf4j
 @Service
@@ -29,6 +30,8 @@ public class CertRenewalWorkflowService {
     private final ChatClient chatClient;
     private final SupplierService supplierService;
     private final NotificationService notificationService;
+    private final SupplierCertService supplierCertService;
+    private final Neo4jSyncService neo4jSyncService;
 
     /** 供应商状态：冻结 */
     private static final int STATUS_FROZEN = 4;
@@ -54,8 +57,8 @@ public class CertRenewalWorkflowService {
 
     /**
      * 触发时机：供应商上传新资质时手动触发（{@code POST /api/cert/review}）。
-     * 动作：基础规则 + LLM 审核 → 通过则更新图谱资质有效期；
-     * 无关联风险恢复合作状态，有风险则通知管理员。
+     * 动作：基础规则 + LLM 审核 → 通过则先写 PG（srm_supplier_cert 权威源），
+     * 再同步到 Neo4j；无关联风险恢复合作状态，有风险则通知管理员。
      */
     public void autoReviewCert(Long supplierId, String certType, String certNo, LocalDate newExpireDate) {
         boolean valid = aiReviewCert(certType, certNo, newExpireDate);
@@ -64,7 +67,9 @@ public class CertRenewalWorkflowService {
             return;
         }
 
-        neo4jRepo.updateCertExpiry(supplierId, certType, newExpireDate);
+        // 先写 PG 权威源，再同步到 Neo4j，恢复「PG 为准」
+        supplierCertService.upsert(supplierId, certType, certNo, newExpireDate);
+        neo4jSyncService.syncCert();
 
         List<String> risks = neo4jRepo.getRelatedRisks(supplierId);
         if (risks.isEmpty()) {

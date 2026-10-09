@@ -1,6 +1,8 @@
 package com.srm.modules.graph.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.srm.modules.cert.entity.SupplierCert;
+import com.srm.modules.cert.mapper.SupplierCertMapper;
 import com.srm.modules.graph.repository.GraphRepository;
 import com.srm.modules.order.entity.Order;
 import com.srm.modules.order.mapper.OrderMapper;
@@ -42,14 +44,16 @@ public class Neo4jSyncService {
     private final OrderMapper orderMapper;
     private final DictItemMapper dictItemMapper;
     private final UserMapper userMapper;
+    private final SupplierCertMapper supplierCertMapper;
 
     /** 全量同步，返回各实体同步条数。 */
     public Map<String, Integer> syncAll() {
         int users = syncUsers();
         int suppliers = syncSuppliers();
+        int certs = syncCert();
         int orders = syncOrders();
-        log.info("[Neo4jSync] 同步完成 users={} suppliers={} orders={}", users, suppliers, orders);
-        return Map.of("users", users, "suppliers", suppliers, "orders", orders);
+        log.info("[Neo4jSync] 同步完成 users={} suppliers={} certs={} orders={}", users, suppliers, certs, orders);
+        return Map.of("users", users, "suppliers", suppliers, "certs", certs, "orders", orders);
     }
 
     // ==================== 用户 ====================
@@ -120,6 +124,36 @@ public class Neo4jSyncService {
                 .stream()
                 .filter(d -> d.getLabel() != null && d.getValue() != null)
                 .collect(Collectors.toMap(DictItem::getLabel, DictItem::getValue, (a, b) -> a));
+    }
+
+    // ==================== 资质证书 ====================
+
+    /** 全量同步资质证书到 Neo4j：PG 为权威源，先清空旧 Cert 节点与关系再重建。 */
+    public int syncCert() {
+        List<SupplierCert> certs = supplierCertMapper.selectList(null);
+        graphRepository.write("MATCH (:Supplier)-[r:CERTIFIED_WITH]->(:Cert) DELETE r", Map.of());
+        graphRepository.write("MATCH (c:Cert) DELETE c", Map.of());
+        for (SupplierCert cert : certs) {
+            syncCert(cert);
+        }
+        log.info("[Neo4jSync] 同步资质证书 {} 张", certs.size());
+        return certs.size();
+    }
+
+    private void syncCert(SupplierCert cert) {
+        graphRepository.write("""
+                MERGE (s:Supplier {id: $supplierId})
+                MERGE (c:Cert {certNo: $certNo})
+                SET c.type = $certType, c.issueDate = $issueDate,
+                    c.expireDate = $expireDate, c.status = $status
+                MERGE (s)-[:CERTIFIED_WITH {status: $status}]->(c)
+                """, Map.of(
+                "supplierId", cert.getSupplierId(),
+                "certNo", cert.getCertNo(),
+                "certType", cert.getCertType() == null ? "" : cert.getCertType(),
+                "issueDate", cert.getIssueDate() == null ? "" : cert.getIssueDate().toString(),
+                "expireDate", cert.getExpireDate() == null ? "" : cert.getExpireDate().toString(),
+                "status", cert.getStatus() == null ? "有效" : cert.getStatus()));
     }
 
     // ==================== 采购订单 ====================

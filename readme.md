@@ -309,7 +309,7 @@ Java 后端内嵌 Spring AI（OpenAI 协议兼容 DashScope 通义千问），�
 
 资质证书（Cert）数据只存在 Neo4j（`graph/seed.cypher` 手动 `MERGE`），业务库 pg 无 cert 表（`srm_supplier` 仅 `qualification_level` 等级字段）。`CertRenewalWorkflowService.autoReviewCert` 直接调用 `Neo4jSupplierRepository.updateCertExpiry` 改 Neo4j 的 Cert 节点，把 Neo4j 当成业务库读写，与「Neo4j 手动同步、业务库 pg 为准」的架构不一致；且 `Neo4jSyncService` 只同步 supplier/user/order，不含 cert。
 
-**规划**：新增 pg 业务表（如 `srm_supplier_cert`）作为资质数据权威落点，cert 续期先写 pg，再由 `Neo4jSyncService` 同步 cert 到图谱。
+**状态**：✅ 已实现 —— 新增 `srm_supplier_cert` 表作为权威源，`autoReviewCert` 先写 PG 再经 `Neo4jSyncService.syncCert()` 同步到图谱；前端供应商工作台新增「资质」管理入口。
 
 ---
 

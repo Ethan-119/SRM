@@ -6,6 +6,7 @@ import {
   updateSupplier,
   deleteSupplier,
 } from '@/api/supplierApi'
+import { fetchSupplierCerts, submitCertReview } from '@/api/certApi'
 import Pagination from '@/components/Pagination.vue'
 
 const STATUS_MAP = {
@@ -58,6 +59,15 @@ const emptyForm = () => ({
 const form = reactive(emptyForm())
 
 const isEdit = computed(() => editingId.value != null)
+
+// --- 资质证书 ---
+const showCert = ref(false)
+const certSupplier = ref(null)
+const certList = ref([])
+const certLoading = ref(false)
+const certError = ref('')
+const certSuccess = ref('')
+const certForm = reactive({ certType: '', certNo: '', newExpireDate: '' })
 
 async function load() {
   loading.value = true
@@ -183,6 +193,59 @@ async function remove(row) {
   }
 }
 
+function openCerts(row) {
+  certSupplier.value = row
+  certForm.certType = ''
+  certForm.certNo = ''
+  certForm.newExpireDate = ''
+  certError.value = ''
+  certSuccess.value = ''
+  showCert.value = true
+  loadCerts(row.id)
+}
+
+function closeCerts() {
+  showCert.value = false
+  certSupplier.value = null
+}
+
+async function loadCerts(supplierId) {
+  certLoading.value = true
+  certError.value = ''
+  try {
+    certList.value = await fetchSupplierCerts(supplierId)
+  } catch (e) {
+    certError.value = e.message || '加载证书失败'
+    certList.value = []
+  } finally {
+    certLoading.value = false
+  }
+}
+
+async function submitCert() {
+  if (!certForm.certType.trim() || !certForm.certNo.trim() || !certForm.newExpireDate) {
+    certError.value = '请填写证书类型、证书编号和新有效期'
+    return
+  }
+  certError.value = ''
+  certSuccess.value = ''
+  try {
+    await submitCertReview({
+      supplierId: certSupplier.value.id,
+      certType: certForm.certType.trim(),
+      certNo: certForm.certNo.trim(),
+      newExpireDate: certForm.newExpireDate,
+    })
+    certSuccess.value = '已提交，审核通过后自动更新证书与图谱'
+    certForm.certType = ''
+    certForm.certNo = ''
+    certForm.newExpireDate = ''
+    loadCerts(certSupplier.value.id)
+  } catch (e) {
+    certError.value = e.message || '续期失败'
+  }
+}
+
 function statusLabel(v) {
   return STATUS_MAP[v] ?? v ?? '—'
 }
@@ -211,6 +274,10 @@ function levelBadgeClass(v) {
 onMounted(load)
 
 watch(showForm, (val) => {
+  document.body.style.overflow = val ? 'hidden' : ''
+})
+
+watch(showCert, (val) => {
   document.body.style.overflow = val ? 'hidden' : ''
 })
 </script>
@@ -341,6 +408,75 @@ watch(showForm, (val) => {
       </div>
       </Teleport>
 
+      <!-- 资质证书弹窗 -->
+      <Teleport to="body">
+        <div v-if="showCert" class="modal-overlay" @click.self="closeCerts">
+        <div class="modal-dialog">
+          <div class="modal-header">
+            <h2>资质证书 — {{ certSupplier?.supplierName }}</h2>
+            <button class="modal-close" @click="closeCerts" title="关闭">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div v-if="certError" class="msg error">{{ certError }}</div>
+            <div v-if="certSuccess" class="msg ok">{{ certSuccess }}</div>
+
+            <div v-if="certLoading" class="loading-block">
+              <span class="loading-spinner" aria-hidden="true" /> 加载中…
+            </div>
+            <div v-else-if="certList.length === 0" class="empty-state">
+              <span class="emoji">📄</span> 暂无资质证书
+            </div>
+            <div v-else class="table-wrap">
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th>类型</th>
+                    <th>证书编号</th>
+                    <th>过期日期</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="c in certList" :key="c.id">
+                    <td>{{ c.certType || '—' }}</td>
+                    <td class="mono">{{ c.certNo }}</td>
+                    <td class="mono">{{ c.expireDate }}</td>
+                    <td>
+                      <span
+                        class="badge"
+                        :class="c.status === '过期' ? 'badge--rose' : 'badge--emerald'"
+                      >
+                        {{ c.status }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="form-grid" style="margin-top: 1rem">
+              <label class="field">
+                证书类型 *
+                <input v-model="certForm.certType" placeholder="如 ISO9001" />
+              </label>
+              <label class="field">
+                证书编号 *
+                <input v-model="certForm.certNo" placeholder="新证书编号" />
+              </label>
+              <label class="field">
+                新有效期 *
+                <input v-model="certForm.newExpireDate" type="date" />
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn" @click="submitCert">提交续期审核</button>
+            <button type="button" class="btn secondary" @click="closeCerts">关闭</button>
+          </div>
+        </div>
+      </div>
+      </Teleport>
+
       <div v-if="loading" class="loading-block">
         <span class="loading-spinner" aria-hidden="true" />
         正在拉取数据…
@@ -384,6 +520,9 @@ watch(showForm, (val) => {
               </td>
               <td class="mono">{{ row.updateTime || row.createTime || '—' }}</td>
               <td class="actions-cell">
+                <button type="button" class="btn secondary" @click="openCerts(row)">
+                  资质
+                </button>
                 <button type="button" class="btn secondary" @click="openEdit(row)">
                   编辑
                 </button>
