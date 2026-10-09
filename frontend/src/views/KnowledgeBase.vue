@@ -1,6 +1,21 @@
 <script setup>
 import { ref } from 'vue'
-import { searchRag, addRagDocument, batchAddRagDocuments, uploadRagDocuments } from '@/api/ragApi'
+import {
+  searchRag,
+  addRagDocument,
+  batchAddRagDocuments,
+  uploadRagDocuments,
+  cleanRagPreview,
+} from '@/api/ragApi'
+
+// —— 数据清洗 ——
+const cleanFileInput = ref(null)
+const cleanFile = ref(null)
+const cleanText = ref('')
+const cleaning = ref(false)
+const importing = ref(false)
+const cleanMsg = ref(null)
+const cleanResult = ref(null)
 
 // —— 文件导入 ——
 const fileInput = ref(null)
@@ -27,6 +42,75 @@ const searching = ref(false)
 const searched = ref(false)
 const searchError = ref('')
 const results = ref([])
+
+function onCleanFileChange(e) {
+  const f = e.target.files && e.target.files[0]
+  cleanFile.value = f || null
+}
+
+async function submitClean() {
+  if (!cleanFile.value && !cleanText.value.trim()) {
+    cleanMsg.value = { type: 'error', text: '请选择文件或粘贴文本' }
+    return
+  }
+  cleaning.value = true
+  cleanMsg.value = null
+  cleanResult.value = null
+  try {
+    const fd = new FormData()
+    if (cleanFile.value) {
+      fd.append('file', cleanFile.value)
+    } else {
+      fd.append('text', cleanText.value)
+    }
+    cleanResult.value = await cleanRagPreview(fd)
+    const r = cleanResult.value
+    const s = r.stats || {}
+    if (r.recordText) {
+      cleanMsg.value = {
+        type: 'ok',
+        text: `识别为 ${r.recordCount} 条记录（去空行 ${s.removedEmptyLines}、去重复行 ${s.removedDuplicateLines}、去乱码字符 ${s.removedControlChars}），请检查后导入`,
+      }
+    } else {
+      cleanMsg.value = {
+        type: 'ok',
+        text: `长文清洗完成（去空行 ${s.removedEmptyLines}、去重复行 ${s.removedDuplicateLines}、去乱码字符 ${s.removedControlChars}）`,
+      }
+    }
+  } catch (e) {
+    cleanMsg.value = { type: 'error', text: e.message || '清洗失败' }
+  } finally {
+    cleaning.value = false
+  }
+}
+
+async function confirmCleanImport() {
+  const r = cleanResult.value
+  if (!r || !r.recordText || !r.records || r.records.length === 0) {
+    cleanMsg.value = { type: 'error', text: '没有可导入的记录，请先「清洗预览」' }
+    return
+  }
+  importing.value = true
+  try {
+    const docs = r.records.map((rec) => ({
+      id: rec.id,
+      title: rec.title,
+      content: rec.content,
+      source: rec.source,
+      metadata: rec.metadata,
+    }))
+    const count = await batchAddRagDocuments(docs)
+    cleanMsg.value = { type: 'ok', text: `已提交 ${count} 条记录，后台异步向量化中` }
+    cleanResult.value = null
+    cleanText.value = ''
+    cleanFile.value = null
+    if (cleanFileInput.value) cleanFileInput.value.value = ''
+  } catch (e) {
+    cleanMsg.value = { type: 'error', text: e.message || '导入失败' }
+  } finally {
+    importing.value = false
+  }
+}
 
 function onFileChange(e) {
   uploadFiles.value = Array.from(e.target.files || [])
@@ -144,6 +228,76 @@ function formatSimilarity(v) {
         <p class="lead">手动补充 RAG 知识库：把文档片段写入 pgvector，并验证向量检索召回效果。</p>
       </div>
     </div>
+
+    <!-- 数据清洗 -->
+    <section class="panel">
+      <h2>数据清洗</h2>
+      <p class="lead" style="margin: -0.4rem 0 0.9rem; font-size: 0.85rem; color: var(--muted)">
+        上传或粘贴 txt / csv 原始数据，清洗并识别为「一行一档」，人工确认后再导入向量库。
+      </p>
+      <label class="field">
+        <span>上传文件（txt / csv）</span>
+        <input ref="cleanFileInput" type="file" accept=".txt,.csv,.tsv" @change="onCleanFileChange" />
+      </label>
+      <label class="field" style="margin-top: 0.75rem">
+        <span>或粘贴原始文本</span>
+        <textarea
+          v-model="cleanText"
+          rows="5"
+          placeholder="每行一条记录，tab 或逗号分隔：id ␉ 标题 ␉ 正文 ␉ 来源 ␉ metadata"
+        ></textarea>
+      </label>
+      <div class="toolbar" style="margin-top: 0.85rem">
+        <button class="btn secondary" :disabled="cleaning" @click="submitClean">
+          {{ cleaning ? '清洗中…' : '清洗预览' }}
+        </button>
+        <button
+          class="btn"
+          :disabled="importing || !cleanResult || !cleanResult.recordText"
+          @click="confirmCleanImport"
+        >
+          {{ importing ? '导入中…' : '确认导入' }}
+        </button>
+      </div>
+      <div v-if="cleanMsg" class="msg" :class="cleanMsg.type" style="margin-top: 0.85rem; margin-bottom: 0">
+        {{ cleanMsg.text }}
+      </div>
+
+      <div
+        v-if="cleanResult && cleanResult.recordText && cleanResult.records.length"
+        class="table-wrap"
+        style="margin-top: 0.85rem"
+      >
+        <table class="data">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>标题</th>
+              <th>正文</th>
+              <th>来源</th>
+              <th>元数据</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(rec, i) in cleanResult.records" :key="i">
+              <td class="mono">{{ rec.id }}</td>
+              <td>{{ rec.title }}</td>
+              <td>{{ rec.content }}</td>
+              <td>{{ rec.source }}</td>
+              <td class="mono">{{ JSON.stringify(rec.metadata) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <label
+        v-else-if="cleanResult && !cleanResult.recordText"
+        class="field"
+        style="margin-top: 0.85rem"
+      >
+        <span>清洗后文本预览</span>
+        <textarea :value="cleanResult.cleanedText" rows="8" readonly></textarea>
+      </label>
+    </section>
 
     <!-- 文件导入 -->
     <section class="panel">

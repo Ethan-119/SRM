@@ -5,7 +5,10 @@ import com.srm.config.RabbitMqConfig;
 import com.srm.modules.rag.dto.RagDocumentDTO;
 import com.srm.modules.rag.service.DocumentParserService;
 import com.srm.modules.rag.service.HybridRagService;
+import com.srm.modules.rag.service.StructuredRecordParser;
 import com.srm.modules.rag.service.TextChunker;
+import com.srm.modules.rag.service.TextCleaner;
+import com.srm.modules.rag.vo.CleanPreviewResult;
 import com.srm.modules.rag.vo.FileUploadResult;
 import com.srm.modules.rag.vo.VectorDocument;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +21,9 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +43,8 @@ public class RagController {
     private final RabbitTemplate rabbitTemplate;
     private final DocumentParserService documentParserService;
     private final TextChunker textChunker;
+    private final TextCleaner textCleaner;
+    private final StructuredRecordParser recordParser;
 
     @Operation(summary = "混合检索（向量 + 图谱结构化过滤）")
     @GetMapping("/search")
@@ -82,6 +90,7 @@ public class RagController {
             String name = file.getOriginalFilename();
             try {
                 String text = documentParserService.extractText(file);
+                text = textCleaner.clean(text).text();
                 if (text == null || text.isBlank()) {
                     results.add(new FileUploadResult(name, 0, "未解析出文本内容"));
                     continue;
@@ -108,6 +117,37 @@ public class RagController {
             }
         }
         return Result.ok(results);
+    }
+
+    @Operation(summary = "数据清洗预览（不落库，人工确认后导入）")
+    @PostMapping(value = "/clean/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Result<CleanPreviewResult> cleanPreview(
+            @RequestParam(value = "file", required = false) MultipartFile file,
+            @RequestParam(value = "text", required = false) String text) {
+        String raw;
+        if (file != null && !file.isEmpty()) {
+            try {
+                byte[] bytes = file.getBytes();
+                raw = new String(bytes, StandardCharsets.UTF_8);
+                if (raw.indexOf('\uFFFD') >= 0) {
+                    raw = new String(bytes, Charset.forName("GBK"));
+                }
+            } catch (IOException e) {
+                log.warn("清洗预览读取文件失败", e);
+                return Result.fail(400, "读取文件失败: " + e.getMessage());
+            }
+        } else if (text != null && !text.isBlank()) {
+            raw = text;
+        } else {
+            return Result.fail(400, "请上传文件或粘贴文本");
+        }
+
+        if (recordParser.isRecordText(raw)) {
+            StructuredRecordParser.ParseResult pr = recordParser.parse(raw);
+            return Result.ok(new CleanPreviewResult(null, pr.stats(), true, pr.records().size(), pr.records()));
+        }
+        TextCleaner.CleanResult cr = textCleaner.clean(raw);
+        return Result.ok(new CleanPreviewResult(cr.text(), cr.stats(), false, 0, List.of()));
     }
 
     private String baseName(String name) {

@@ -23,3 +23,8 @@ export function uploadRagDocuments(files) {
   }
   return http.post('/rag/documents/upload', fd).then((r) => r.data)
 }
+
+/** 数据清洗预览（不落库，返回清洗统计 + 逐行记录/清洗后文本） */
+export function cleanRagPreview(formData) {
+  return http.post('/rag/clean/preview', formData).then((r) => r.data)
+}
