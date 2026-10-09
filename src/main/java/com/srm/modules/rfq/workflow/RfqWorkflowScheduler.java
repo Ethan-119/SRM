@@ -44,7 +44,11 @@ public class RfqWorkflowScheduler {
     @Autowired
     private RfqWorkflowScheduler self;
 
-    /** 报价截止的询比价单自动进入分析 */
+    /**
+     * 触发时机：每 30 秒轮询一次（{@code fixedDelay=30000}）。
+     * 触发条件：状态为 QUOTING 且 {@code quote_deadline <= now}（报价已截止）。
+     * 动作：置为 ANALYZING，交由 {@link #runPendingAnalysis()} 分析。
+     */
     @Scheduled(fixedDelay = 30000)
     public void checkDeadlineAndTrigger() {
         List<RfqWorkflow> expired = rfqMapper.selectList(
@@ -58,7 +62,11 @@ public class RfqWorkflowScheduler {
         }
     }
 
-    /** 扫描「分析中」的询比价单，异步执行 AI 分析 */
+    /**
+     * 触发时机：每 30 秒轮询一次（{@code fixedDelay=30000}）。
+     * 触发条件：状态为 ANALYZING（由报价截止或全部报价齐进入）。
+     * 动作：逐单异步执行 {@link #analyzeAsync(Long)} 分析步骤链。
+     */
     @Scheduled(fixedDelay = 30000)
     public void runPendingAnalysis() {
         List<RfqWorkflow> pendings = rfqMapper.selectList(
@@ -69,6 +77,7 @@ public class RfqWorkflowScheduler {
         }
     }
 
+    /** 异步执行分析；按询比价单加 Redis 锁，防止同一单被重复分析。 */
     @Async
     public void analyzeAsync(Long rfqId) {
         String lockKey = ANALYZE_LOCK_PREFIX + rfqId;
@@ -83,6 +92,7 @@ public class RfqWorkflowScheduler {
         }
     }
 
+    /** 真正执行分析：无有效报价则流标（EXPIRED），否则执行评分/风险/推荐/报告步骤链。 */
     private void doAnalyze(Long rfqId) {
         RfqWorkflow rfq = rfqMapper.selectById(rfqId);
         if (rfq == null || !RfqStatus.ANALYZING.name().equals(rfq.getStatus())) {

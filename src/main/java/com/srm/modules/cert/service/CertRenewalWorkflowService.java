@@ -35,7 +35,11 @@ public class CertRenewalWorkflowService {
     /** 供应商状态：合作中 */
     private static final int STATUS_ACTIVE = 3;
 
-    /** 每天凌晨 2 点扫描 30 天内到期的资质。 */
+    /**
+     * 触发时机：每天凌晨 2:00（cron {@code 0 0 2 * * ?}）自动执行。
+     * 触发条件：Neo4j 中资质 {@code expire_date} 落在未来 30 天内。
+     * 动作：通知对应供应商尽快上传新资质。
+     */
     @Scheduled(cron = "0 0 2 * * ?")
     public void scanExpiringCerts() {
         List<CertExpiryAlert> alerts = neo4jRepo.findCertsExpiringInDays(30);
@@ -48,7 +52,11 @@ public class CertRenewalWorkflowService {
         }
     }
 
-    /** 供应商上传新资质后，全自动审核。 */
+    /**
+     * 触发时机：供应商上传新资质时手动触发（{@code POST /api/cert/review}）。
+     * 动作：基础规则 + LLM 审核 → 通过则更新图谱资质有效期；
+     * 无关联风险恢复合作状态，有风险则通知管理员。
+     */
     public void autoReviewCert(Long supplierId, String certType, String certNo, LocalDate newExpireDate) {
         boolean valid = aiReviewCert(certType, certNo, newExpireDate);
         if (!valid) {
@@ -69,7 +77,11 @@ public class CertRenewalWorkflowService {
         log.info("资质审核完成: 供应商 {} 的 {} 更新至 {}", supplierId, certType, newExpireDate);
     }
 
-    /** 每天凌晨 2:30 冻结资质已过期的供应商。 */
+    /**
+     * 触发时机：每天凌晨 2:30（cron {@code 0 30 2 * * ?}）自动执行。
+     * 触发条件：Neo4j 中资质 {@code expire_date} 已早于今天（过期）。
+     * 动作：供应商状态置为 4（冻结）。
+     */
     @Scheduled(cron = "0 30 2 * * ?")
     public void freezeExpiredSuppliers() {
         List<Long> expiredIds = neo4jRepo.findSuppliersWithExpiredCerts();
