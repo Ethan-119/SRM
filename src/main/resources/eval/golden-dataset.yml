@@ -52,3 +52,59 @@
   expectedAnswerContains: ["深圳大疆", "IMU"]
   tags: ["供应商检索"]
   difficulty: "medium"
+
+- id: "EVAL-008"
+  question: "华北地区有哪些电容供应商？"
+  expectedDocIds: ["supplier-416-电容"]
+  expectedAnswerContains: ["保定永通", "电容"]
+  tags: ["供应商检索", "地区过滤"]
+  difficulty: "medium"
+
+- id: "EVAL-009"
+  question: "西北地区有哪些钢材供应商？"
+  expectedDocIds: ["supplier-804-钢材"]
+  expectedAnswerContains: ["兰州永信", "钢材"]
+  tags: ["供应商检索", "地区过滤"]
+  difficulty: "medium"
+
+- id: "EVAL-010"
+  question: "哪家供应商供应LED灯珠？"
+  expectedDocIds: ["supplier-469-LED灯"]
+  expectedAnswerContains: ["宝鸡泰信", "LED灯珠"]
+  tags: ["供应商检索"]
+  difficulty: "medium"
+
+- id: "EVAL-011"
+  question: "FPGA芯片的价格和供应商是谁？"
+  expectedDocIds: ["supplier-673-触摸屏"]
+  expectedAnswerContains: ["宜昌歌电", "FPGA", "3045.66"]
+  tags: ["价格查询"]
+  difficulty: "medium"
+
+- id: "EVAL-012"
+  question: "电源模块的供应商和价格？"
+  expectedDocIds: ["supplier-608-连接器"]
+  expectedAnswerContains: ["合肥鑫科", "电源模块", "2115.7"]
+  tags: ["价格查询"]
+  difficulty: "easy"
+
+- id: "EVAL-013"
+  question: "华东地区有哪些变压器供应商？"
+  expectedDocIds: ["supplier-843-变压器"]
+  expectedAnswerContains: ["厦门泰丰", "变压器"]
+  tags: ["供应商检索", "地区过滤"]
+  difficulty: "medium"
+
+- id: "EVAL-014"
+  question: "哪家供应商做散热器且资质高级？"
+  expectedDocIds: ["supplier-780-散热器"]
+  expectedAnswerContains: ["常州深电", "散热器", "高级"]
+  tags: ["供应商检索", "资质过滤"]
+  difficulty: "hard"
+
+- id: "EVAL-015"
+  question: "西南地区有哪些电子元器件供应商？"
+  expectedDocIds: ["supplier-294-电子元器"]
+  expectedAnswerContains: ["绵阳京新", "电子元器件"]
+  tags: ["供应商检索", "地区过滤"]
+  difficulty: "medium"
