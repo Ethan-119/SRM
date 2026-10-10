@@ -1,0 +1,12 @@
+target/
+.git/
+.idea/
+*.iml
+.vscode/
+logs/
+*.log
+.env
+.env.local
+frontend/
+sql/
+.claude/

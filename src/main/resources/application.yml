@@ -5,6 +5,10 @@ spring:
   application:
     name: srm
 
+  profiles:
+    # 默认 dev（本地直接跑）；线上/容器通过 SPRING_PROFILES_ACTIVE=prod 或 --spring.profiles.active=prod 切换
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
   servlet:
     multipart:
       max-file-size: 20MB

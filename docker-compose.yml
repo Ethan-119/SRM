@@ -1,0 +1,112 @@
+# ============================================
+# SRM 供应商管理系统 - Docker Compose 编排
+# 使用：cp .env 并填好密码后，docker compose up -d
+# 首次启动会自动执行 sql/init.sql + sql/testdata.sql 初始化数据库
+# ============================================
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: srm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: SRM
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # 首次初始化：表结构 + 向量库 + 字典 + admin（注意挂到 initdb.d 目录，仅在空库首次启动时执行）
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./sql/testdata.sql:/docker-entrypoint-initdb.d/02_testdata.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d SRM"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: srm-redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  neo4j:
+    image: neo4j:5
+    container_name: srm-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+    ports:
+      - "7474:7474"   # Browser
+      - "7687:7687"   # Bolt
+    volumes:
+      - neo4jdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p ${NEO4J_PASSWORD} 'RETURN 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: srm-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # 管理后台
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  app:
+    build: .
+    container_name: srm-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # 密码（从 .env 注入）
+      DB_PASSWORD: ${DB_PASSWORD}
+      PGVECTOR_PASSWORD: ${PGVECTOR_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      # 首次部署临时开 true 同步图谱 / 灌向量，跑完改回 false
+      NEO4J_SYNC_ON_STARTUP: ${NEO4J_SYNC_ON_STARTUP:-false}
+      RAG_INGEST_ON_STARTUP: ${RAG_INGEST_ON_STARTUP:-false}
+    ports:
+      - "8083:8083"
+
+volumes:
+  pgdata:
+  redisdata:
+  neo4jdata:
+  rabbitmqdata:
