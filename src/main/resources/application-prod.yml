@@ -1,45 +1,53 @@
+# 生产环境：全部走环境变量（Docker 部署时由 .env / compose 注入）
+# 默认值按 Docker 服务名（postgres / redis / neo4j / rabbitmq）配置，
+# 密码等敏感项默认留空，未配置则启动失败，避免线上误用弱口令。
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/SRM
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://${DB_HOST:postgres}:${DB_PORT:5432}/${DB_NAME:SRM}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:123456}
+    password: ${DB_PASSWORD:}
     hikari:
       pool-name: Postgres
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 30000
 
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
+      host: ${REDIS_HOST:redis}
       port: ${REDIS_PORT:6379}
       # ACL 场景设置 REDIS_USERNAME；默认留空，对应仅 requirepass 的 Redis
       username: ${REDIS_USERNAME:}
-      password: ${REDIS_PASSWORD:123456}
+      password: ${REDIS_PASSWORD:}
       database: ${REDIS_DATABASE:15}
       client-name: Redis
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
 
-  ai:
-    openai:
-      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
-      api-key: ${DASHSCOPE_API_KEY:}
-      chat:
-        options:
-          model: ${AI_CHAT_MODEL:qwen3-flash}
-      embedding:
-        options:
-          model: ${AI_EMBEDDING_MODEL:text-embedding-v4}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:admin}
+    password: ${RABBITMQ_PASSWORD:}
 
 srm:
-  agent:
-    # Redis 短期记忆窗口（最近 N 条消息），长期记忆在 PG srm_agent_message 表
-    history-window: ${AGENT_HISTORY_WINDOW:20}
   neo4j:
-    uri: bolt://${NEO4J_HOST:localhost}:${NEO4J_PORT:7687}
+    uri: bolt://${NEO4J_HOST:neo4j}:${NEO4J_PORT:7687}
     username: ${NEO4J_USERNAME:neo4j}
-    password: ${NEO4J_PASSWORD:123456}
+    password: ${NEO4J_PASSWORD:}
     database: ${NEO4J_DATABASE:neo4j}
+    # 启动时自动把业务库同步到图谱（首次部署临时设 true，跑完改回 false）
+    sync-on-startup: ${NEO4J_SYNC_ON_STARTUP:false}
   pgvector:
-    url: jdbc:postgresql://${PGVECTOR_HOST:localhost}:${PGVECTOR_PORT:5432}/${PGVECTOR_DB:SRM}
+    url: jdbc:postgresql://${PGVECTOR_HOST:postgres}:${PGVECTOR_PORT:5432}/${PGVECTOR_DB:SRM}
     username: ${PGVECTOR_USERNAME:postgres}
-    password: ${PGVECTOR_PASSWORD:123456}
+    password: ${PGVECTOR_PASSWORD:}
     table: ${PGVECTOR_TABLE:vector_store}
     dimension: ${PGVECTOR_DIMENSION:1024}
     top-k: ${PGVECTOR_TOPK:20}

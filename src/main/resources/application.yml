@@ -2,8 +2,6 @@ server:
   port: 8083
 
 spring:
-  profiles:
-    active: dev
   application:
     name: srm
 
@@ -12,42 +10,9 @@ spring:
       max-file-size: 20MB
       max-request-size: 60MB
 
-  datasource:
-    driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql://localhost:5432/SRM
-    username: postgres
-    password: 123456
-    hikari:
-      pool-name: Postgres
-      minimum-idle: 5
-      maximum-pool-size: 20
-      idle-timeout: 300000
-      max-lifetime: 1200000
-      connection-timeout: 30000
-
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      # 仅当 Redis 启用 ACL（Redis 6+ 且配置了用户）时才配置 username；单机 requirepass 请勿填写
-      password: 123456
-      database: 15
-      client-name: Redis
-      lettuce:
-        pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 0
-
-  rabbitmq:
-    host: ${RABBITMQ_HOST:121.197.0.85}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:admin}
-    password: ${RABBITMQ_PASSWORD:Rabbit@123}
-
   ai:
     openai:
-      # DashScope 兼容 OpenAI 协议
+      # DashScope 兼容 OpenAI 协议（dev / prod 共用同一云端 API）
       # 注意：Spring AI 1.0 默认补全路径为 /v1/chat/completions、embedding 为 /v1/embeddings，
       # 因此 base-url 不能以 /v1 结尾，否则会出现 /v1/v1/chat/completions 的 404。
       base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
@@ -73,22 +38,8 @@ srm:
   agent:
     # Redis 短期记忆窗口（最近 N 条消息），长期记忆在 PG srm_agent_message 表
     history-window: ${AGENT_HISTORY_WINDOW:20}
-  neo4j:
-    uri: ${NEO4J_URI:bolt://localhost:7687}
-    username: ${NEO4J_USERNAME:neo4j}
-    password: ${NEO4J_PASSWORD:neo4j123456}
-    database: ${NEO4J_DATABASE:neo4j}
-    # 启动时自动把业务库同步到图谱（默认关闭，需 Neo4j 已启动）
-    sync-on-startup: ${NEO4J_SYNC_ON_STARTUP:false}
-  pgvector:
-    url: ${PGVECTOR_URL:jdbc:postgresql://localhost:5432/SRM}
-    username: ${PGVECTOR_USERNAME:postgres}
-    password: ${PGVECTOR_PASSWORD:123456}
-    table: ${PGVECTOR_TABLE:vector_store}
-    dimension: ${PGVECTOR_DIMENSION:1024}
-    top-k: ${PGVECTOR_TOPK:20}
   rag:
-    # 启动时是否把演示文档向量化灌入 pgvector（一次性灌库，幂等；默认关闭，设 true 后启动即灌入）
+    # 启动时是否把演示文档向量化灌入 pgvector（一次性灌库，幂等；默认关闭）
     ingest-on-startup: ${RAG_INGEST_ON_STARTUP:false}
     # 文件导入时，单块文本的最大字符数（超长文本按段落/句子边界切分）
     chunk-size: ${RAG_CHUNK_SIZE:800}
