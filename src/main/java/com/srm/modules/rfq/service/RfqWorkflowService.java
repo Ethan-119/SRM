@@ -10,26 +10,26 @@ import com.srm.modules.rfq.enums.RfqStatus;
 import com.srm.modules.rfq.mapper.RfqWorkflowMapper;
 import com.srm.modules.rfq.vo.AiAnalysisResult;
 import com.srm.modules.rfq.vo.QuoteRecord;
+import com.srm.modules.supplier.entity.Supplier;
+import com.srm.modules.supplier.service.SupplierService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
- * 智能询比价工作流（交互入口）。
+ * 询比价工作流（交互入口）。
  *
- * <p>流程：创建询比价单 → 供应商报价（限时）→ 自动进入分析 → 采购员确认 → 生成订单。
- * 其中的「AI 评分/风险/推荐/报告」已拆分为步骤链，由 {@code RfqWorkflowScheduler}
- * 驱动 {@code RfqStepChain} 异步执行，本类只保留交互入口与状态迁移。</p>
+ * <p>定位：RFQ 作为 Agent 的「深度分析」工具，由 Chat 统一入口驱动，同步完成
+ * 「创建单 + 模拟收报价 + 分析 + 留痕」，不再依赖定时轮询与异步状态机。</p>
  */
 @Slf4j
 @Service
@@ -38,111 +38,48 @@ public class RfqWorkflowService {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.BASIC_ISO_DATE;
 
-    /** 报价锁：按「询价单 + 供应商」加锁（供应商 = 用户） */
-    private static final String QUOTE_LOCK_PREFIX = "srm:rfq:lock:quote:";
     /** 确认锁：按「询价单 + 采购员」加锁（采购员 = 用户） */
     private static final String CONFIRM_LOCK_PREFIX = "srm:rfq:lock:confirm:";
     private static final long LOCK_TTL_SECONDS = 30;
 
     private final RfqWorkflowMapper rfqMapper;
+    private final RfqAnalysisService analysisService;
     private final OrderService orderService;
+    private final SupplierService supplierService;
     private final NotificationService notificationService;
     private final RfqLockService lockService;
 
-    // ==================== 创建询比价单 ====================
+    // ==================== 创建 + 分析（同步） ====================
 
+    /** 创建询比价单 + 模拟报价 + 同步分析 + 留痕。 */
     @Transactional
-    public RfqWorkflow createRfq(String materialName, BigDecimal quantity,
-                                 List<Long> supplierIds, int quoteHours) {
+    public RfqWorkflow createAndAnalyze(String materialName, BigDecimal quantity, List<Long> supplierIds) {
+        List<Long> suppliers = (supplierIds == null || supplierIds.isEmpty())
+                ? defaultSuppliers() : supplierIds;
+        if (suppliers.isEmpty()) {
+            throw new BusinessException("没有可参与询比价的供应商");
+        }
+
         String rfqNo = "RFQ-" + LocalDate.now().format(DATE_FMT)
                 + "-" + (System.currentTimeMillis() % 100000);
         RfqWorkflow rfq = new RfqWorkflow();
         rfq.setRfqNo(rfqNo);
         rfq.setMaterialName(materialName);
         rfq.setQuantity(quantity);
-        rfq.setSupplierIds(JSONUtil.toJsonStr(supplierIds));
-        rfq.setQuotes(JSONUtil.toJsonStr(new ArrayList<QuoteRecord>()));
-        rfq.setStatus(RfqStatus.QUOTING.name());
-        rfq.setQuoteDeadline(LocalDateTime.now().plusHours(quoteHours));
+        rfq.setSupplierIds(JSONUtil.toJsonStr(suppliers));
+
+        List<QuoteRecord> quotes = simulateQuotes(suppliers, materialName);
+        rfq.setQuotes(JSONUtil.toJsonStr(quotes));
+
+        AiAnalysisResult analysis = analysisService.analyze(rfq, quotes);
+        rfq.setAiAnalysis(JSONUtil.toJsonStr(analysis));
+        rfq.setStatus(RfqStatus.PENDING_CONFIRM.name());
         rfqMapper.insert(rfq);
 
-        supplierIds.forEach(id -> notificationService.notifySupplier(id,
-                "您收到询比价邀请 " + rfqNo + "（物料：" + materialName + "），请在截止时间前报价。"));
-        log.info("询比价单创建: {}, 等待 {} 家供应商报价", rfqNo, supplierIds.size());
+        notificationService.notifyManager("询比价单 " + rfqNo + " 分析完成，推荐供应商 "
+                + supplierName(analysis.getRecommendSupplierId()) + "，请确认。");
+        log.info("询比价单 {} 创建并分析完成，推荐供应商 {}", rfqNo, analysis.getRecommendSupplierId());
         return rfq;
-    }
-
-    // ==================== 供应商报价 ====================
-
-    @Transactional
-    public void submitQuote(Long rfqId, Long supplierId, BigDecimal price,
-                            BigDecimal taxRate, int deliveryDays) {
-        String lockKey = QUOTE_LOCK_PREFIX + rfqId + ":" + supplierId;
-        if (!lockService.tryLock(lockKey, LOCK_TTL_SECONDS)) {
-            throw new BusinessException("该供应商报价正在处理中，请勿重复提交");
-        }
-        try {
-            doSubmitQuote(rfqId, supplierId, price, taxRate, deliveryDays);
-        } finally {
-            lockService.unlock(lockKey);
-        }
-    }
-
-    private void doSubmitQuote(Long rfqId, Long supplierId, BigDecimal price,
-                               BigDecimal taxRate, int deliveryDays) {
-        RfqWorkflow rfq = rfqMapper.selectById(rfqId);
-        if (rfq == null) {
-            throw new BusinessException("询比价单不存在");
-        }
-        if (!RfqStatus.QUOTING.name().equals(rfq.getStatus())) {
-            throw new BusinessException("当前状态不允许报价: " + rfq.getStatus());
-        }
-        if (LocalDateTime.now().isAfter(rfq.getQuoteDeadline())) {
-            throw new BusinessException("已超过报价截止时间");
-        }
-
-        List<Long> expected = parseSupplierIds(rfq.getSupplierIds());
-        if (!expected.contains(supplierId)) {
-            throw new BusinessException("该供应商不在本次询比价范围内");
-        }
-
-        List<QuoteRecord> quotes = parseQuotes(rfq.getQuotes());
-        quotes.removeIf(q -> q.getSupplierId().equals(supplierId)); // 重复报价覆盖
-        QuoteRecord quote = new QuoteRecord();
-        quote.setSupplierId(supplierId);
-        quote.setPrice(price);
-        quote.setTaxRate(taxRate);
-        quote.setDeliveryDays(deliveryDays);
-        quote.setQuoteTime(LocalDateTime.now());
-        quotes.add(quote);
-        rfq.setQuotes(JSONUtil.toJsonStr(quotes));
-        rfqMapper.updateById(rfq);
-
-        log.info("供应商 {} 报价 ¥{}，询比价单 {}", supplierId, price, rfq.getRfqNo());
-
-        // 全部报价齐 → 置为待分析，由调度线程统一驱动 AI 分析
-        Set<Long> quoted = quotes.stream().map(QuoteRecord::getSupplierId).collect(Collectors.toSet());
-        if (quoted.containsAll(expected)) {
-            rfq.setStatus(RfqStatus.ANALYZING.name());
-            rfqMapper.updateById(rfq);
-            log.info("所有供应商已报价，询比价单 {} 进入分析队列", rfq.getRfqNo());
-        }
-    }
-
-    // ==================== 触发分析（截止 / 手动） ====================
-
-    @Transactional
-    public void triggerAnalysis(Long rfqId) {
-        RfqWorkflow rfq = rfqMapper.selectById(rfqId);
-        if (rfq == null) {
-            throw new BusinessException("询比价单不存在");
-        }
-        if (!RfqStatus.QUOTING.name().equals(rfq.getStatus())) {
-            return;
-        }
-        rfq.setStatus(RfqStatus.ANALYZING.name());
-        rfqMapper.updateById(rfq);
-        log.info("询比价单 {} 触发 AI 分析", rfq.getRfqNo());
     }
 
     // ==================== 采购员确认 / 驳回 ====================
@@ -185,7 +122,6 @@ public class RfqWorkflowService {
         }
 
         Long orderId = createOrder(rfq, supplierId, managerId);
-
         rfq.setStatus(RfqStatus.ORDERED.name());
         rfq.setConfirmBy(managerId);
         rfq.setConfirmTime(LocalDateTime.now());
@@ -210,6 +146,46 @@ public class RfqWorkflowService {
 
     // ==================== 私有方法 ====================
 
+    /** 默认参与方：状态为「合作中」(3) 的供应商。 */
+    private List<Long> defaultSuppliers() {
+        return supplierService.list().stream()
+                .filter(s -> s.getStatus() != null && s.getStatus() == 3)
+                .map(Supplier::getId)
+                .toList();
+    }
+
+    /** 模拟报价：以历史成交均价为基准，按供应商 ID 做确定性浮动，保证可复现。 */
+    private List<QuoteRecord> simulateQuotes(List<Long> supplierIds, String materialName) {
+        BigDecimal base = historicalAvgPrice(materialName);
+        if (base == null || base.signum() <= 0) {
+            base = BigDecimal.valueOf(100);
+        }
+        List<QuoteRecord> quotes = new ArrayList<>();
+        for (Long id : supplierIds) {
+            QuoteRecord q = new QuoteRecord();
+            q.setSupplierId(id);
+            double factor = 0.88 + (Math.abs(id % 7)) * 0.04; // 0.88 ~ 1.12
+            q.setPrice(base.multiply(BigDecimal.valueOf(factor)).setScale(2, RoundingMode.HALF_UP));
+            q.setTaxRate(new BigDecimal("13"));
+            q.setDeliveryDays(5 + (int) (Math.abs(id % 11))); // 5 ~ 15 天
+            q.setQuoteTime(LocalDateTime.now());
+            quotes.add(q);
+        }
+        return quotes;
+    }
+
+    private BigDecimal historicalAvgPrice(String materialName) {
+        List<Order> orders = orderService.list().stream()
+                .filter(o -> o.getMaterialName() != null && o.getMaterialName().contains(materialName))
+                .filter(o -> o.getUnitPrice() != null)
+                .toList();
+        if (orders.isEmpty()) {
+            return null;
+        }
+        double avg = orders.stream().mapToDouble(o -> o.getUnitPrice().doubleValue()).average().orElse(0);
+        return BigDecimal.valueOf(avg);
+    }
+
     private Long createOrder(RfqWorkflow rfq, Long supplierId, Long managerId) {
         QuoteRecord quote = parseQuotes(rfq.getQuotes()).stream()
                 .filter(q -> q.getSupplierId().equals(supplierId)).findFirst()
@@ -231,17 +207,18 @@ public class RfqWorkflowService {
         return order.getId();
     }
 
-    private List<Long> parseSupplierIds(String json) {
-        if (json == null || json.isBlank()) {
-            return new ArrayList<>();
-        }
-        return JSONUtil.toList(json, Long.class);
-    }
-
     private List<QuoteRecord> parseQuotes(String json) {
         if (json == null || json.isBlank()) {
             return new ArrayList<>();
         }
         return JSONUtil.toList(json, QuoteRecord.class);
+    }
+
+    private String supplierName(Long supplierId) {
+        if (supplierId == null) {
+            return "未知";
+        }
+        Supplier s = supplierService.getById(supplierId);
+        return s == null ? "供应商#" + supplierId : s.getSupplierName();
     }
 }

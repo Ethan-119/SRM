@@ -2,8 +2,6 @@ package com.srm.modules.agent.tools;
 
 import com.srm.modules.order.entity.Order;
 import com.srm.modules.order.service.OrderService;
-import com.srm.modules.supplier.entity.Supplier;
-import com.srm.modules.supplier.service.SupplierService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -11,21 +9,17 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
- * 价格与询比价相关工具。
+ * 价格相关工具（轻量快速查询）。
+ * 正式询比价/比价/推荐已收敛到 {@code RfqTool.runFormalRfq}。
  */
 @Component
 @RequiredArgsConstructor
 public class PriceTools {
 
     private final OrderService orderService;
-    private final SupplierService supplierService;
 
     @Tool(description = "获取指定物料的历史成交价格参考（平均价/最低价/最高价）")
     public String getPriceReference(@ToolParam(description = "物料名称") String materialName) {
@@ -83,83 +77,6 @@ public class PriceTools {
                 + "  合计总价: " + fmt(total) + "元";
     }
 
-    @Tool(description = "对指定物料进行供应商报价排名，返回按最优单价升序排列的供应商列表")
-    public String getSupplierRanking(@ToolParam(description = "物料名称") String materialName,
-                                     @ToolParam(description = "地区过滤，可为空", required = false) String regionFilter) {
-        Map<Long, Supplier> supplierMap = supplierService.list().stream()
-                .collect(Collectors.toMap(Supplier::getId, s -> s, (a, b) -> a));
-
-        // 供应商 -> 最优单价
-        Map<Long, Double> bestPrice = new HashMap<>();
-        for (Order o : filterByMaterial(materialName)) {
-            Double cur = bestPrice.get(o.getSupplierId());
-            double p = toDouble(o.getUnitPrice());
-            if (cur == null || p < cur) {
-                bestPrice.put(o.getSupplierId(), p);
-            }
-        }
-
-        List<Map.Entry<Long, Double>> ranked = new ArrayList<>(bestPrice.entrySet());
-        ranked.sort(Map.Entry.comparingByValue());
-
-        StringBuilder sb = new StringBuilder("物料「" + materialName + "」供应商报价排名：\n");
-        int idx = 0;
-        for (Map.Entry<Long, Double> e : ranked) {
-            Supplier s = supplierMap.get(e.getKey());
-            if (s == null) {
-                continue;
-            }
-            if (regionFilter != null && !regionFilter.isBlank()
-                    && !regionFilter.equals(s.getRegion())) {
-                continue;
-            }
-            idx++;
-            sb.append(idx).append(". ").append(s.getSupplierName())
-                    .append("（").append(s.getRegion()).append("）")
-                    .append(" 最优单价: ").append(fmt(e.getValue())).append("元")
-                    .append(" 状态: ").append(status(s.getStatus())).append("\n");
-        }
-        if (idx == 0) {
-            return "未找到物料「" + materialName + "」的可比价供应商" +
-                    (regionFilter == null || regionFilter.isBlank() ? "" : "（地区：" + regionFilter + "）") + "。";
-        }
-        return sb.toString();
-    }
-
-    @Tool(description = "对指定物料和指定供应商集合生成比价报告")
-    public String generateComparisonReport(@ToolParam(description = "物料名称") String materialName,
-                                           @ToolParam(description = "供应商ID列表") List<Long> supplierIds) {
-        Map<Long, Supplier> supplierMap = supplierService.list().stream()
-                .collect(Collectors.toMap(Supplier::getId, s -> s, (a, b) -> a));
-
-        Map<Long, Double> bestPrice = new HashMap<>();
-        for (Order o : filterByMaterial(materialName)) {
-            if (!supplierIds.contains(o.getSupplierId())) {
-                continue;
-            }
-            double p = toDouble(o.getUnitPrice());
-            bestPrice.merge(o.getSupplierId(), p, (a, b) -> a <= b ? a : b);
-        }
-
-        StringBuilder sb = new StringBuilder("物料「" + materialName + "」比价报告：\n");
-        List<Map.Entry<Long, Double>> ranked = new ArrayList<>(bestPrice.entrySet());
-        ranked.sort(Map.Entry.comparingByValue());
-        for (Map.Entry<Long, Double> e : ranked) {
-            Supplier s = supplierMap.get(e.getKey());
-            if (s == null) {
-                continue;
-            }
-            sb.append("- ").append(s.getSupplierName())
-                    .append(" 报价: ").append(fmt(e.getValue())).append("元")
-                    .append(" 资质: ").append(s.getQualificationLevel())
-                    .append(" 状态: ").append(status(s.getStatus())).append("\n");
-        }
-        if (ranked.isEmpty()) {
-            return "指定供应商在物料「" + materialName + "」上暂无成交记录，无法比价。";
-        }
-        return sb.toString();
-    }
-
     private List<Order> filterByMaterial(String materialName) {
         List<Order> orders = orderService.list();
         return orders.stream()
@@ -173,15 +90,5 @@ public class PriceTools {
 
     private String fmt(double v) {
         return String.format("%,.2f", v);
-    }
-
-    private String status(Integer s) {
-        return switch (s == null ? -1 : s) {
-            case 2 -> "已准入";
-            case 3 -> "合作中";
-            case 4 -> "冻结";
-            case 5 -> "黑名单";
-            default -> "未知";
-        };
     }
 }
