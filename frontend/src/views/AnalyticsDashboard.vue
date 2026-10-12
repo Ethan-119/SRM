@@ -275,7 +275,7 @@ onMounted(() => {
           </div>
         </div>
         <div v-else-if="concSearched" class="msg">
-          未找到物料「{{ concMaterial }}」的供应数据。请确认物料名称，或先在 Neo4j 导入图谱种子数据（graph/seed.cypher）。
+          未找到物料「{{ concMaterial }}」的供应数据。请确认物料名称是否正确。
         </div>
         <div v-else class="empty-state">
           <span class="emoji">📊</span>

@@ -42,6 +42,10 @@ srm:
   agent:
     # Redis 短期记忆窗口（最近 N 条消息），长期记忆在 PG srm_agent_message 表
     history-window: ${AGENT_HISTORY_WINDOW:20}
+  neo4j:
+    # 启动时是否灌入图谱种子数据（SUPPLIES 供应关系，HHI 集中度分析依赖；一次性、幂等；默认关闭）
+    # 首次部署可临时置 true，跑完改回 false
+    seed-on-startup: ${NEO4J_SEED_ON_STARTUP:false}
   rag:
     # 启动时是否把演示文档向量化灌入 pgvector（一次性灌库，幂等；默认关闭）
     ingest-on-startup: ${RAG_INGEST_ON_STARTUP:false}

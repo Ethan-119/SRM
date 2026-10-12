@@ -1,6 +1,6 @@
 # ============================================
 # SRM 供应商管理系统 - Docker Compose 编排
-# 使用：cp .env 并填好密码后，docker compose up -d
+# 使用：cp .env 并填好密码后，docker compose up -d --build
 # 首次启动会自动执行 sql/init.sql + sql/testdata.sql 初始化数据库
 # ============================================
 
@@ -47,6 +47,10 @@ services:
     restart: unless-stopped
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+      # 2G 内存服务器：限制堆与 pagecache，避免 OOM
+      NEO4J_server_memory_heap_initial__size: 128m
+      NEO4J_server_memory_heap_max__size: 512m
+      NEO4J_server_memory_pagecache_size: 128m
     ports:
       - "7474:7474"   # Browser
       - "7687:7687"   # Bolt
@@ -92,6 +96,8 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      # 限制 JVM 堆，适配 2G 内存服务器
+      JAVA_TOOL_OPTIONS: "-Xms192m -Xmx384m"
       # 密码（从 .env 注入）
       DB_PASSWORD: ${DB_PASSWORD}
       PGVECTOR_PASSWORD: ${PGVECTOR_PASSWORD}
@@ -101,9 +107,22 @@ services:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
       # 首次部署临时开 true 同步图谱 / 灌向量，跑完改回 false
       NEO4J_SYNC_ON_STARTUP: ${NEO4J_SYNC_ON_STARTUP:-false}
+      # 灌入图谱种子数据（SUPPLIES 供应关系，HHI 集中度分析依赖），一次性、幂等
+      NEO4J_SEED_ON_STARTUP: ${NEO4J_SEED_ON_STARTUP:-false}
       RAG_INGEST_ON_STARTUP: ${RAG_INGEST_ON_STARTUP:-false}
     ports:
       - "8083:8083"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: srm-frontend
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
 
 volumes:
   pgdata:

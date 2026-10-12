@@ -2,6 +2,7 @@ package com.srm.modules.graph.controller;
 
 import com.srm.common.Result;
 import com.srm.modules.graph.service.GraphIntelligenceService;
+import com.srm.modules.graph.service.Neo4jSeedService;
 import com.srm.modules.graph.service.Neo4jSyncService;
 import com.srm.modules.graph.service.SupplierScoreService;
 import com.srm.modules.graph.vo.AlternativeSupplierVO;
@@ -22,7 +23,8 @@ import java.util.List;
  * <p>本模块为被动服务，自身无定时任务，触发方式：
  * <ul>
  *   <li>启动同步：{@code srm.neo4j.sync-on-startup=true} 时全量同步业务库到图谱；</li>
- *   <li>手动同步：{@code POST /api/graph/sync}；</li>
+ *   <li>启动灌种子：{@code srm.neo4j.seed-on-startup=true} 时灌入 SUPPLIES 供应关系；</li>
+ *   <li>手动同步：{@code POST /api/graph/sync}；手动灌种子：{@code POST /api/graph/seed}；</li>
  *   <li>按需分析：本控制器各 GET 接口（集中度/替代供应商/关联风险/评分/画像）；</li>
  *   <li>AI Agent 工具：{@code GraphAnalysisTools} 由 LLM 在对话中按需调用；</li>
  *   <li>RAG 混合检索：{@code HybridRagService} 每次检索时查询图谱做结构化过滤。</li>
@@ -37,6 +39,7 @@ public class GraphIntelligenceController {
     private final GraphIntelligenceService graphIntelligenceService;
     private final SupplierScoreService supplierScoreService;
     private final Neo4jSyncService neo4jSyncService;
+    private final Neo4jSeedService neo4jSeedService;
 
     @Operation(summary = "供应链集中度风险（赫芬达尔指数）")
     @GetMapping("/concentration")
@@ -73,5 +76,11 @@ public class GraphIntelligenceController {
     @PostMapping("/sync")
     public Result<java.util.Map<String, Integer>> sync() {
         return Result.ok(neo4jSyncService.syncAll());
+    }
+
+    @Operation(summary = "灌入图谱种子数据（SUPPLIES 供应关系，HHI 集中度分析依赖）")
+    @PostMapping("/seed")
+    public Result<java.util.Map<String, Integer>> seed() {
+        return Result.ok(neo4jSeedService.loadSeed());
     }
 }
