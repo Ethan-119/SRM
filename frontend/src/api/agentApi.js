@@ -10,8 +10,9 @@ export function sendMessage(query, sessionId = 'default') {
 
 /**
  * 流式对话（SSE），返回 fetch Response，外部读取 ReadableStream
+ * @param {AbortSignal} [signal] 用于切页/卸载时主动断开流
  */
-export function sendMessageStream(query, sessionId = 'default') {
+export function sendMessageStream(query, sessionId = 'default', signal) {
   const token = getToken() || ''
   return fetch('/api/agent/chat/stream', {
     method: 'POST',
@@ -20,6 +21,7 @@ export function sendMessageStream(query, sessionId = 'default') {
       Authorization: token ? `Bearer ${token}` : '',
     },
     body: JSON.stringify({ query, session_id: sessionId }),
+    signal,
   })
 }
 

@@ -26,6 +26,9 @@ public class EvalReport {
     /** 平均 NDCG@K */
     private Double avgNdcgAtK;
 
+    /** 平均 Hit Rate@K（0~1） */
+    private Double avgHitRate;
+
     /** 平均答案准确率（可空） */
     private Double avgAccuracy;
 
@@ -40,6 +43,12 @@ public class EvalReport {
 
     /** 平均忠实度（可空） */
     private Double avgFaithfulness;
+
+    /** 拒答准确率（拒答用例中正确拒答的比例；无拒答用例时为 null） */
+    private Double refusalAccuracy;
+
+    /** 空召回率（0~1，检索返回 0 条文档的用例占比） */
+    private Double emptyRecallRate;
 
     /** 按标签分组统计 */
     private Map<String, TagStats> byTag;

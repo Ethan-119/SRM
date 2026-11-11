@@ -27,4 +27,7 @@ public class EvalCase {
 
     /** 难度：easy / medium / hard */
     private String difficulty;
+
+    /** 是否期望系统拒答（true 表示知识库无依据，应拒答/说明无法回答） */
+    private Boolean expectedRefusal;
 }

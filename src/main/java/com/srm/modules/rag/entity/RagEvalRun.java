@@ -32,8 +32,11 @@ public class RagEvalRun extends BaseEntity {
     private Double avgPrecision;
     private Double mrr;
     private Double avgNdcg;
+    private Double avgHitRate;
     private Double avgAccuracy;
     private Double avgFaithfulness;
+    private Double refusalAccuracy;
+    private Double emptyRecallRate;
 
     private Long latencyP50;
     private Long latencyP95;

@@ -66,12 +66,33 @@ public class RagEvalRunner {
         r.setPrecisionAtK(round(RagMetricsCalculator.precisionAtK(retrievedIds, expected, k)));
         r.setReciprocalRank(round(RagMetricsCalculator.reciprocalRank(retrievedIds, expected)));
         r.setNdcgAtK(round(RagMetricsCalculator.ndcgAtK(retrievedIds, expected, k)));
+        r.setHitRate(round(RagMetricsCalculator.hitRateAtK(retrievedIds, expected, k)));
         r.setAccuracy(round(computeAccuracy(answer, c.getExpectedAnswerContains())));
         r.setFaithfulness(round(computeFaithfulness(c, docs, answer)));
+        r.setRefused(isRefusal(answer));
+        r.setExpectedRefusal(c.getExpectedRefusal());
         r.setLatencyMs(latencyMs);
         r.setTags(c.getTags());
         r.setDifficulty(c.getDifficulty());
         return r;
+    }
+
+    /** 拒答检测（启发式）：答案命中"无法回答"类关键词判为拒答，不调 LLM。 */
+    private static final List<String> REFUSAL_KEYWORDS = List.of(
+            "无法回答", "无法提供", "未找到", "没有找到", "资料不足", "没有相关",
+            "无相关", "没有足够", "知识库中没有", "没有记录", "无法确定", "抱歉",
+            "无法查询", "查不到", "未提供", "无相关信息");
+
+    private boolean isRefusal(String answer) {
+        if (answer == null) {
+            return true;
+        }
+        for (String kw : REFUSAL_KEYWORDS) {
+            if (answer.contains(kw)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 用检索到的资料生成答案；失败返回 null（准确率/忠实度会随之判 0）。 */
@@ -117,7 +138,7 @@ public class RagEvalRunner {
         String context = docs.stream().map(VectorDocument::content)
                 .collect(Collectors.joining("\n"));
         return chatClient.prompt()
-                .system("你是采购知识库助手。请仅依据下面提供的资料回答问题，不要编造资料中没有的事实。")
+                .system("你是采购知识库助手。请仅依据下面提供的资料回答问题，不要编造资料中没有的事实。如果资料中确实没有答案，请直接说明「无法回答」或「资料不足」，不要编造。")
                 .user("问题：" + question + "\n资料：\n" + context)
                 .call()
                 .content();
@@ -130,14 +151,44 @@ public class RagEvalRunner {
         report.setAvgPrecisionAtK(round(avg(results, EvalResult::getPrecisionAtK)));
         report.setMrr(round(avg(results, EvalResult::getReciprocalRank)));
         report.setAvgNdcgAtK(round(avg(results, EvalResult::getNdcgAtK)));
+        report.setAvgHitRate(round(avg(results, EvalResult::getHitRate)));
         report.setAvgAccuracy(round(avg(results, EvalResult::getAccuracy)));
         report.setAvgFaithfulness(round(avg(results, EvalResult::getFaithfulness)));
+        report.setRefusalAccuracy(round(refusalAccuracy(results)));
+        report.setEmptyRecallRate(round(emptyRecallRate(results)));
         report.setLatencyP50(percentile(results, 50));
         report.setLatencyP95(percentile(results, 95));
         report.setLatencyP99(percentile(results, 99));
         report.setByTag(groupByTag(results));
         report.setResults(results);
         return report;
+    }
+
+    /** 拒答准确率：拒答用例中正确拒答的比例；无拒答用例返回 null。 */
+    private Double refusalAccuracy(List<EvalResult> results) {
+        int refusalCases = 0;
+        int correctRefusals = 0;
+        for (EvalResult r : results) {
+            boolean shouldRefuse = Boolean.TRUE.equals(r.getExpectedRefusal());
+            if (shouldRefuse) {
+                refusalCases++;
+                if (Boolean.TRUE.equals(r.getRefused())) {
+                    correctRefusals++;
+                }
+            }
+        }
+        return refusalCases == 0 ? null : (double) correctRefusals / refusalCases;
+    }
+
+    /** 空召回率：检索返回 0 条文档的用例占比。 */
+    private double emptyRecallRate(List<EvalResult> results) {
+        if (results.isEmpty()) {
+            return 0.0;
+        }
+        long empty = results.stream()
+                .filter(r -> r.getRetrievedDocIds() == null || r.getRetrievedDocIds().isEmpty())
+                .count();
+        return (double) empty / results.size();
     }
 
     private Map<String, EvalReport.TagStats> groupByTag(List<EvalResult> results) {

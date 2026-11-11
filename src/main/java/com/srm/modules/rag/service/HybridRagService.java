@@ -9,20 +9,19 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * 混合检索 RAG：向量检索（pgvector）+ 结构化过滤（Neo4j）。
+ * 混合检索 RAG：向量检索（pgvector）+ 结构化过滤（Neo4j）+ 交叉编码器重排序（qwen3.7-text-rerank）。
  *
  * 流程：
- * 1. 向量检索 Top-20（语义相似）
+ * 1. 向量检索 Top-N（语义召回，放大候选池供 rerank 精排）
  * 2. 提取文档中提到的供应商名称
- * 3. Neo4j 结构化过滤：只保留「已准入 / 合作中」且无过期资质的供应商
- * 4. 过滤 + 重排序，返回 Top-K
+ * 3. Neo4j 结构化过滤：剔除提到「不合规供应商」的文档（仅保留已准入/合作中且无过期资质）
+ * 4. rerank 模型对候选精排，返回 Top-K
  */
 @Service
 @RequiredArgsConstructor
@@ -30,14 +29,11 @@ public class HybridRagService {
 
     private final RagDocumentService ragDocumentService;
     private final GraphRepository graphRepository;
+    private final RerankService rerankService;
 
-    @Value("${srm.pgvector.top-k:20}")
+    /** 向量召回候选数：放大到 50，供 rerank 精排选择 */
+    @Value("${srm.pgvector.top-k:50}")
     private int vectorTopK;
-
-    /** 命中合规供应商时的加权 */
-    private static final double VALID_BOOST = 0.20;
-    /** 命中被过滤供应商时的惩罚 */
-    private static final double INVALID_PENALTY = 0.20;
 
     public List<VectorDocument> retrieve(String query, int topK) {
         // 1. 向量检索 Top-N
@@ -48,17 +44,22 @@ public class HybridRagService {
 
         // 2. 提取候选文档中提到的供应商名称
         Set<String> mentionedNames = extractMentionedSupplierNames(candidates);
-        if (mentionedNames.isEmpty()) {
-            return rerankAndLimit(candidates, Set.of(), Set.of(), topK);
+        List<VectorDocument> compliant = candidates;
+        if (!mentionedNames.isEmpty()) {
+            Set<String> validNames = filterValidActiveSuppliers(mentionedNames);
+            Set<String> invalidNames = new HashSet<>(mentionedNames);
+            invalidNames.removeAll(validNames);
+            // 3. 结构化硬过滤：剔除提到不合规供应商的文档（过滤后为空则回退全部）
+            List<VectorDocument> filtered = candidates.stream()
+                    .filter(d -> !containsAny(d.content(), invalidNames))
+                    .toList();
+            if (!filtered.isEmpty()) {
+                compliant = filtered;
+            }
         }
 
-        // 3. Neo4j 结构化过滤
-        Set<String> validNames = filterValidActiveSuppliers(mentionedNames);
-        Set<String> invalidNames = new HashSet<>(mentionedNames);
-        invalidNames.removeAll(validNames);
-
-        // 4. 重排序
-        return rerankAndLimit(candidates, validNames, invalidNames, topK);
+        // 4. 交叉编码器重排序
+        return rerankService.rerank(query, compliant, topK);
     }
 
     /** 提取文档内容中出现的所有供应商名称。 */
@@ -93,26 +94,6 @@ public class HybridRagService {
             valid.add(record.get("name").asString());
         }
         return valid;
-    }
-
-    private List<VectorDocument> rerankAndLimit(List<VectorDocument> candidates,
-                                                Set<String> validNames,
-                                                Set<String> invalidNames,
-                                                int topK) {
-        List<VectorDocument> ranked = new ArrayList<>(candidates.size());
-        for (VectorDocument doc : candidates) {
-            double score = doc.similarity();
-            if (containsAny(doc.content(), validNames)) {
-                score += VALID_BOOST;
-            }
-            if (containsAny(doc.content(), invalidNames)) {
-                score -= INVALID_PENALTY;
-            }
-            ranked.add(new VectorDocument(doc.id(), doc.content(), doc.metadata(), score));
-        }
-        ranked.sort(Comparator.comparingDouble(VectorDocument::similarity).reversed());
-        int limit = Math.min(topK, ranked.size());
-        return ranked.subList(0, limit);
     }
 
     private boolean containsAny(String content, Collection<String> names) {

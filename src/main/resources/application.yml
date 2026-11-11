@@ -51,6 +51,11 @@ srm:
     ingest-on-startup: ${RAG_INGEST_ON_STARTUP:false}
     # 文件导入时，单块文本的最大字符数（超长文本按段落/句子边界切分）
     chunk-size: ${RAG_CHUNK_SIZE:800}
+  rerank:
+    # 交叉编码器重排序模型（DashScope 原生接口，嵌套 input/parameters 结构）
+    model: ${RERANK_MODEL:qwen3.7-text-rerank}
+    # 端点需按百炼控制台确认（是否带 WorkspaceId/地域），原生接口路径如下
+    base-url: ${RERANK_BASE_URL:https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank}
 
 # Knife4j
 springdoc:

@@ -41,6 +41,20 @@ public final class RagMetricsCalculator {
         return (double) hits / limit;
     }
 
+    /** Hit Rate@K：前 K 个结果是否命中任一期望文档（命中=1，未命中=0）。 */
+    public static double hitRateAtK(List<String> retrieved, Set<String> expected, int k) {
+        if (expected.isEmpty()) {
+            return 0.0;
+        }
+        int limit = Math.min(k, retrieved.size());
+        for (int i = 0; i < limit; i++) {
+            if (expected.contains(retrieved.get(i))) {
+                return 1.0;
+            }
+        }
+        return 0.0;
+    }
+
     /** 倒数排名：1 / 首个命中位置（从 1 开始），无命中返回 0。 */
     public static double reciprocalRank(List<String> retrieved, Set<String> expected) {
         for (int i = 0; i < retrieved.size(); i++) {

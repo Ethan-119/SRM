@@ -1,5 +1,5 @@
 <script setup>
-import { ref, nextTick, onMounted, computed } from 'vue'
+import { ref, nextTick, onMounted, onBeforeUnmount, computed } from 'vue'
 import { sendMessageStream, fetchHistory, clearHistory } from '@/api/agentApi'
 import EChart from '@/components/EChart.vue'
 
@@ -30,6 +30,7 @@ const messages = ref([])
 const input = ref('')
 const sending = ref(false)
 const chatBody = ref(null)
+let streamController = null
 
 const activeSession = computed(() => sessions.value.find((s) => s.id === activeId.value))
 
@@ -105,7 +106,8 @@ async function send() {
   scrollBottom()
 
   try {
-    const resp = await sendMessageStream(text, activeId.value)
+    streamController = new AbortController()
+    const resp = await sendMessageStream(text, activeId.value, streamController.signal)
     const reader = resp.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
@@ -147,6 +149,7 @@ async function send() {
   } finally {
     sending.value = false
     scrollBottom()
+    streamController = null
   }
 }
 
@@ -352,6 +355,14 @@ onMounted(() => {
     loadHistoryFor(activeId.value)
   } else if (sessions.value.length > 0) {
     switchSession(sessions.value[0].id)
+  }
+})
+
+// 切页/卸载时主动断开正在进行的流式请求，避免孤儿连接
+onBeforeUnmount(() => {
+  if (streamController) {
+    streamController.abort()
+    streamController = null
   }
 })
 </script>

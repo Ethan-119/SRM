@@ -337,8 +337,11 @@ CREATE TABLE srm_rag_eval_run (
     avg_precision    NUMERIC(10,6),
     mrr              NUMERIC(10,6),
     avg_ndcg         NUMERIC(10,6),
+    avg_hit_rate     NUMERIC(10,6),
     avg_accuracy     NUMERIC(10,6),
     avg_faithfulness NUMERIC(10,6),
+    refusal_accuracy NUMERIC(10,6),
+    empty_recall_rate NUMERIC(10,6),
     latency_p50      BIGINT,
     latency_p95      BIGINT,
     latency_p99      BIGINT,
@@ -362,8 +365,11 @@ COMMENT ON COLUMN srm_rag_eval_run.avg_recall IS '平均召回率 Recall@K';
 COMMENT ON COLUMN srm_rag_eval_run.avg_precision IS '平均精确率 Precision@K';
 COMMENT ON COLUMN srm_rag_eval_run.mrr IS '平均倒数排名 MRR';
 COMMENT ON COLUMN srm_rag_eval_run.avg_ndcg IS '平均 NDCG@K';
+COMMENT ON COLUMN srm_rag_eval_run.avg_hit_rate IS '平均 Hit Rate@K';
 COMMENT ON COLUMN srm_rag_eval_run.avg_accuracy IS '平均答案准确率';
 COMMENT ON COLUMN srm_rag_eval_run.avg_faithfulness IS '平均忠实度';
+COMMENT ON COLUMN srm_rag_eval_run.refusal_accuracy IS '拒答准确率';
+COMMENT ON COLUMN srm_rag_eval_run.empty_recall_rate IS '空召回率';
 COMMENT ON COLUMN srm_rag_eval_run.latency_p50 IS '检索延迟 P50（毫秒）';
 COMMENT ON COLUMN srm_rag_eval_run.latency_p95 IS '检索延迟 P95（毫秒）';
 COMMENT ON COLUMN srm_rag_eval_run.latency_p99 IS '检索延迟 P99（毫秒）';
@@ -388,8 +394,10 @@ CREATE TABLE srm_rag_eval_result (
     precision         NUMERIC(10,6),
     mrr               NUMERIC(10,6),
     ndcg              NUMERIC(10,6),
+    hit_rate          NUMERIC(10,6),
     accuracy          NUMERIC(10,6),
     faithfulness      NUMERIC(10,6),
+    refused           SMALLINT,
     latency_ms        BIGINT,
     tags              VARCHAR(255),
     difficulty        VARCHAR(16),
@@ -412,8 +420,10 @@ COMMENT ON COLUMN srm_rag_eval_result.recall IS '召回率 Recall@K';
 COMMENT ON COLUMN srm_rag_eval_result.precision IS '精确率 Precision@K';
 COMMENT ON COLUMN srm_rag_eval_result.mrr IS '倒数排名 MRR';
 COMMENT ON COLUMN srm_rag_eval_result.ndcg IS 'NDCG@K';
+COMMENT ON COLUMN srm_rag_eval_result.hit_rate IS 'Hit Rate@K';
 COMMENT ON COLUMN srm_rag_eval_result.accuracy IS '答案准确率';
 COMMENT ON COLUMN srm_rag_eval_result.faithfulness IS '忠实度';
+COMMENT ON COLUMN srm_rag_eval_result.refused IS '是否拒答: 0-否 1-是';
 COMMENT ON COLUMN srm_rag_eval_result.latency_ms IS '检索延迟（毫秒）';
 COMMENT ON COLUMN srm_rag_eval_result.tags IS '标签（逗号分隔）';
 COMMENT ON COLUMN srm_rag_eval_result.difficulty IS '难度';

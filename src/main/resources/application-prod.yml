@@ -50,7 +50,7 @@ srm:
     password: ${PGVECTOR_PASSWORD:}
     table: ${PGVECTOR_TABLE:vector_store}
     dimension: ${PGVECTOR_DIMENSION:1024}
-    top-k: ${PGVECTOR_TOPK:20}
+    top-k: ${PGVECTOR_TOPK:50}
 
 logging:
   level:

@@ -29,8 +29,10 @@ public class RagEvalResultEntity extends BaseEntity {
     private Double precision;
     private Double mrr;
     private Double ndcg;
+    private Double hitRate;
     private Double accuracy;
     private Double faithfulness;
+    private Integer refused;
 
     private Long latencyMs;
 

@@ -1,110 +1,300 @@
 # ============================================
-# SRM 混合检索 RAG - 黄金标准数据集
-# 字段：id / question / expectedDocIds / expectedAnswerContains / tags / difficulty
-# 文档 ID 与「知识库」页面手动插入的文档 ID 对齐。
+# SRM RAG 黄金标准数据集（真实业务语料）
+# 文档 ID 与 RagCorpusInitializer 生成规则对齐：
+#   supplier-{id}                    供应商档案（200）
+#   cert-{certNo}                    资质证书（20）
+#   supply-{supplierId}-{materialId} 物料供应（171）
+#   policy-admission / policy-procurement / policy-admission-v1  制度文档
+# 检索链路：pgvector Top-50 → Neo4j 结构化过滤(仅已准入/合作中) → rerank
+# 评测 K 建议取 5。
 # ============================================
 
+# ---- 高频：价格查询（物料最低报价，仅合规供应商） ----
 - id: "EVAL-001"
-  question: "华东地区有哪些电子元器件供应商？"
-  expectedDocIds: ["supplier-24-电子元器件", "supplier-14-电子元器件"]
-  expectedAnswerContains: ["无锡华润", "厦门亿联"]
-  tags: ["供应商检索", "地区过滤"]
+  question: "冷轧钢板最低报价的供应商是哪家？"
+  expectedDocIds: ["supply-100-MAT-STEEL-CRS"]
+  expectedAnswerContains: ["兰州瑞丰", "7705.74"]
+  tags: ["价格查询"]
   difficulty: "medium"
 
 - id: "EVAL-002"
-  question: "STM32单片机的价格和供应商是谁？"
-  expectedDocIds: ["supplier-1-STM32"]
-  expectedAnswerContains: ["深圳华强", "STM32", "32"]
+  question: "不锈钢板的最低报价是多少？"
+  expectedDocIds: ["supply-145-MAT-STEEL-SS"]
+  expectedAnswerContains: ["天津北方", "18153.76"]
   tags: ["价格查询"]
-  difficulty: "easy"
+  difficulty: "medium"
 
 - id: "EVAL-003"
-  question: "冷轧钢板的价格和交货期是多少？"
-  expectedDocIds: ["supplier-2-冷轧钢板"]
-  expectedAnswerContains: ["上海宝钢", "8500"]
+  question: "STM32单片机最便宜的是哪家供应商？"
+  expectedDocIds: ["supply-93-MAT-ELEC-MCU"]
+  expectedAnswerContains: ["上海锦绣", "29.84"]
   tags: ["价格查询"]
-  difficulty: "easy"
+  difficulty: "medium"
 
 - id: "EVAL-004"
-  question: "不锈钢板的供应商和价格？"
-  expectedDocIds: ["supplier-39-不锈钢板"]
-  expectedAnswerContains: ["太原钢铁", "18000"]
+  question: "色谱纯乙腈最低报价的供应商是谁？"
+  expectedDocIds: ["supply-55-MAT-PHARMA-ACN"]
+  expectedAnswerContains: ["太原恒瑞", "254.03"]
   tags: ["价格查询"]
-  difficulty: "easy"
+  difficulty: "medium"
 
 - id: "EVAL-005"
-  question: "华南地区有塑胶原料供应商吗？"
-  expectedDocIds: ["supplier-3-塑胶原料"]
-  expectedAnswerContains: ["东莞万通", "塑胶"]
-  tags: ["供应商检索", "地区过滤"]
-  difficulty: "easy"
+  question: "ABS塑料粒子报价最低的供应商是哪家？"
+  expectedDocIds: ["supply-16-MAT-PLASTIC-ABS"]
+  expectedAnswerContains: ["石家庄天马", "16.75"]
+  tags: ["价格查询"]
+  difficulty: "medium"
 
 - id: "EVAL-006"
-  question: "哪家供应商做光纤通信器件？"
-  expectedDocIds: ["supplier-7-电子元器件"]
-  expectedAnswerContains: ["武汉光谷", "光纤"]
-  tags: ["供应商检索"]
+  question: "伺服电机报价最低的供应商是谁，多少钱？"
+  expectedDocIds: ["supply-43-MAT-MACH-SERVO"]
+  expectedAnswerContains: ["宁波凯旋", "1640.19"]
+  tags: ["价格查询"]
   difficulty: "medium"
 
 - id: "EVAL-007"
-  question: "哪家供应商供应IMU惯导模块？"
-  expectedDocIds: ["supplier-31-电子元器件"]
-  expectedAnswerContains: ["深圳大疆", "IMU"]
-  tags: ["供应商检索"]
+  question: "精密丝杆最低报价的供应商是哪家？"
+  expectedDocIds: ["supply-89-MAT-MACH-SCREW"]
+  expectedAnswerContains: ["长沙星际", "406.36"]
+  tags: ["价格查询"]
   difficulty: "medium"
 
 - id: "EVAL-008"
-  question: "华北地区有哪些电容供应商？"
-  expectedDocIds: ["supplier-416-电容"]
-  expectedAnswerContains: ["保定永通", "电容"]
-  tags: ["供应商检索", "地区过滤"]
+  question: "挖掘机配件报价最低的供应商是谁？"
+  expectedDocIds: ["supply-148-MAT-ENG-PART"]
+  expectedAnswerContains: ["南宁精工", "596.25"]
+  tags: ["价格查询"]
   difficulty: "medium"
 
 - id: "EVAL-009"
-  question: "西北地区有哪些钢材供应商？"
-  expectedDocIds: ["supplier-804-钢材"]
-  expectedAnswerContains: ["兰州永信", "钢材"]
-  tags: ["供应商检索", "地区过滤"]
+  question: "干式变压器最低报价是多少？"
+  expectedDocIds: ["supply-184-MAT-POWER-TRANS"]
+  expectedAnswerContains: ["苏州世贸", "174605.42"]
+  tags: ["价格查询"]
   difficulty: "medium"
 
 - id: "EVAL-010"
-  question: "哪家供应商供应LED灯珠？"
-  expectedDocIds: ["supplier-469-LED灯"]
-  expectedAnswerContains: ["宝鸡泰信", "LED灯珠"]
-  tags: ["供应商检索"]
+  question: "瓦楞纸箱报价最低的供应商是哪家？"
+  expectedDocIds: ["supply-162-MAT-PACK-CARTON"]
+  expectedAnswerContains: ["呼和浩特天府", "2.92"]
+  tags: ["价格查询"]
   difficulty: "medium"
 
 - id: "EVAL-011"
-  question: "FPGA芯片的价格和供应商是谁？"
-  expectedDocIds: ["supplier-673-触摸屏"]
-  expectedAnswerContains: ["宜昌歌电", "FPGA", "3045.66"]
+  question: "光纤跳线最低报价的供应商是谁？"
+  expectedDocIds: ["supply-75-MAT-ELEC-FIBER"]
+  expectedAnswerContains: ["天津宇通", "6.34"]
   tags: ["价格查询"]
   difficulty: "medium"
 
 - id: "EVAL-012"
-  question: "电源模块的供应商和价格？"
-  expectedDocIds: ["supplier-608-连接器"]
-  expectedAnswerContains: ["合肥鑫科", "电源模块", "2115.7"]
+  question: "汽车刹车片报价最低的供应商是哪家？"
+  expectedDocIds: ["supply-8-MAT-AUTO-BRAKE"]
+  expectedAnswerContains: ["厦门先声", "76.81"]
   tags: ["价格查询"]
-  difficulty: "easy"
+  difficulty: "medium"
 
 - id: "EVAL-013"
-  question: "华东地区有哪些变压器供应商？"
-  expectedDocIds: ["supplier-843-变压器"]
-  expectedAnswerContains: ["厦门泰丰", "变压器"]
-  tags: ["供应商检索", "地区过滤"]
+  question: "办公桌椅最低报价的供应商是谁？"
+  expectedDocIds: ["supply-99-MAT-OFFICE-DESK"]
+  expectedAnswerContains: ["贵阳西电", "1087.46"]
+  tags: ["价格查询"]
   difficulty: "medium"
 
 - id: "EVAL-014"
-  question: "哪家供应商做散热器且资质高级？"
-  expectedDocIds: ["supplier-780-散热器"]
-  expectedAnswerContains: ["常州深电", "散热器", "高级"]
-  tags: ["供应商检索", "资质过滤"]
+  question: "锂电池正极材料最低报价的供应商是哪家？"
+  expectedDocIds: ["supply-187-MAT-NEWMAT-LFP"]
+  expectedAnswerContains: ["南京船舶", "149.81"]
+  tags: ["价格查询"]
+  difficulty: "medium"
+
+# ---- 高频：供应商档案查询（仅已准入/合作中供应商） ----
+- id: "EVAL-015"
+  question: "厦门先声汽车零部件有限公司主营什么品类？"
+  expectedDocIds: ["supplier-8"]
+  expectedAnswerContains: ["汽车零部件"]
+  tags: ["供应商检索"]
+  difficulty: "easy"
+
+- id: "EVAL-016"
+  question: "郑州天马包装材料有限公司的资质等级是什么？"
+  expectedDocIds: ["supplier-12"]
+  expectedAnswerContains: ["高级"]
+  tags: ["供应商检索"]
+  difficulty: "easy"
+
+- id: "EVAL-017"
+  question: "东莞宝钢医药科技有限公司当前是什么状态？"
+  expectedDocIds: ["supplier-20"]
+  expectedAnswerContains: ["合作中"]
+  tags: ["供应商检索"]
+  difficulty: "easy"
+
+- id: "EVAL-018"
+  question: "长春晶科医药科技有限公司的资质等级是什么？"
+  expectedDocIds: ["supplier-24"]
+  expectedAnswerContains: ["中级"]
+  tags: ["供应商检索"]
+  difficulty: "easy"
+
+- id: "EVAL-019"
+  question: "武汉中芯汽车零部件有限公司主营什么品类？"
+  expectedDocIds: ["supplier-39"]
+  expectedAnswerContains: ["汽车零部件"]
+  tags: ["供应商检索"]
+  difficulty: "easy"
+
+- id: "EVAL-020"
+  question: "青岛恒瑞电子科技有限公司的资质等级是什么？"
+  expectedDocIds: ["supplier-84"]
+  expectedAnswerContains: ["高级"]
+  tags: ["供应商检索"]
+  difficulty: "easy"
+
+# ---- 资质证书（跨 supplier + cert 文档的多跳检索） ----
+- id: "EVAL-021"
+  question: "重庆通威纺织有限公司的CE证书是否过期？"
+  expectedDocIds: ["cert-CE-7129"]
+  expectedAnswerContains: ["过期"]
+  tags: ["资质查询"]
+  difficulty: "medium"
+
+- id: "EVAL-022"
+  question: "杭州华鑫钢材有限公司的ISO45001证书状态如何？"
+  expectedDocIds: ["cert-ISO45001-5770"]
+  expectedAnswerContains: ["过期"]
+  tags: ["资质查询"]
+  difficulty: "medium"
+
+- id: "EVAL-023"
+  question: "宁波蓝光新材料科技有限公司的IATF16949证书是否过期？"
+  expectedDocIds: ["cert-IATF16949-9860"]
+  expectedAnswerContains: ["过期"]
+  tags: ["资质查询"]
+  difficulty: "medium"
+
+- id: "EVAL-024"
+  question: "青岛振华纺织有限公司的CQC证书有效期到什么时候？"
+  expectedDocIds: ["cert-CQC-9139"]
+  expectedAnswerContains: ["2027-09-14"]
+  tags: ["资质查询"]
+  difficulty: "medium"
+
+- id: "EVAL-025"
+  question: "昆明四方机械制造有限公司的CE证书状态如何？"
+  expectedDocIds: ["cert-CE-1988"]
+  expectedAnswerContains: ["有效"]
+  tags: ["资质查询"]
+  difficulty: "medium"
+
+- id: "EVAL-026"
+  question: "苏州绿源新材料科技有限公司的CE证书是否过期？"
+  expectedDocIds: ["cert-CE-2119"]
+  expectedAnswerContains: ["过期"]
+  tags: ["资质查询"]
+  difficulty: "medium"
+
+# ---- 多跳：物料 → 供应商状态 / 资质 ----
+- id: "EVAL-027"
+  question: "STM32单片机最便宜的供应商当前是什么状态？"
+  expectedDocIds: ["supply-93-MAT-ELEC-MCU", "supplier-93"]
+  expectedAnswerContains: ["上海锦绣", "合作中"]
+  tags: ["多跳"]
   difficulty: "hard"
 
-- id: "EVAL-015"
-  question: "西南地区有哪些电子元器件供应商？"
-  expectedDocIds: ["supplier-294-电子元器"]
-  expectedAnswerContains: ["绵阳京新", "电子元器件"]
-  tags: ["供应商检索", "地区过滤"]
+- id: "EVAL-028"
+  question: "冷轧钢板最低价供应商的资质等级是什么？"
+  expectedDocIds: ["supply-100-MAT-STEEL-CRS", "supplier-100"]
+  expectedAnswerContains: ["兰州瑞丰", "高级"]
+  tags: ["多跳"]
+  difficulty: "hard"
+
+# ---- 制度/边界/冲突 ----
+- id: "EVAL-029"
+  question: "没有营业执照的供应商可以先入库后补材料吗？"
+  expectedDocIds: ["policy-admission"]
+  expectedAnswerContains: ["不能", "营业执照"]
+  tags: ["制度边界"]
   difficulty: "medium"
+
+- id: "EVAL-030"
+  question: "供应商准入的最终审批权限在谁？"
+  expectedDocIds: ["policy-admission"]
+  expectedAnswerContains: ["采购委员会"]
+  tags: ["制度冲突"]
+  difficulty: "medium"
+
+- id: "EVAL-031"
+  question: "供应商资质到期未续期会怎样处理？"
+  expectedDocIds: ["policy-admission"]
+  expectedAnswerContains: ["冻结"]
+  tags: ["制度边界"]
+  difficulty: "easy"
+
+- id: "EVAL-032"
+  question: "询比价结果的推荐依据包含哪些维度？"
+  expectedDocIds: ["policy-procurement"]
+  expectedAnswerContains: ["价格", "质量", "交期"]
+  tags: ["制度查询"]
+  difficulty: "medium"
+
+# ---- 拒答（知识库无依据，应明确说明无法回答） ----
+- id: "EVAL-033"
+  question: "供应商老板的私人手机号是多少？"
+  expectedDocIds: []
+  expectedAnswerContains: []
+  expectedRefusal: true
+  tags: ["拒答"]
+  difficulty: "medium"
+
+- id: "EVAL-034"
+  question: "兰州志高新材料科技有限公司去年的年度营业额是多少？"
+  expectedDocIds: []
+  expectedAnswerContains: []
+  expectedRefusal: true
+  tags: ["拒答"]
+  difficulty: "medium"
+
+- id: "EVAL-035"
+  question: "采购员的个人银行卡账号是什么？"
+  expectedDocIds: []
+  expectedAnswerContains: []
+  expectedRefusal: true
+  tags: ["拒答"]
+  difficulty: "easy"
+
+# ---- 噪声干扰（同类物料多个供应商，需精确命中） ----
+- id: "EVAL-036"
+  question: "宁波天府包装材料有限公司供应的瓦楞纸箱单价是多少？"
+  expectedDocIds: ["supply-59-MAT-PACK-CARTON"]
+  expectedAnswerContains: ["宁波天府", "3.48"]
+  tags: ["噪声"]
+  difficulty: "medium"
+
+- id: "EVAL-037"
+  question: "昆明四方机械制造有限公司供应的精密丝杆单价是多少？"
+  expectedDocIds: ["supply-30-MAT-MACH-SCREW"]
+  expectedAnswerContains: ["昆明四方", "432.32"]
+  tags: ["噪声"]
+  difficulty: "medium"
+
+- id: "EVAL-038"
+  question: "苏州天府钢材有限公司供应的冷轧钢板单价是多少？"
+  expectedDocIds: ["supply-57-MAT-STEEL-CRS"]
+  expectedAnswerContains: ["苏州天府", "8926.77"]
+  tags: ["噪声"]
+  difficulty: "medium"
+
+- id: "EVAL-039"
+  question: "大连格力塑胶制品有限公司的资质等级是什么？"
+  expectedDocIds: ["supplier-6"]
+  expectedAnswerContains: ["中级"]
+  tags: ["供应商检索"]
+  difficulty: "easy"
+
+- id: "EVAL-040"
+  question: "佛山广源物流供应链有限公司主营什么品类？"
+  expectedDocIds: ["supplier-38"]
+  expectedAnswerContains: ["物流服务"]
+  tags: ["供应商检索"]
+  difficulty: "easy"

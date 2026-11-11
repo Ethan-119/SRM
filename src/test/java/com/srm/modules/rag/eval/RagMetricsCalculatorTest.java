@@ -39,8 +39,18 @@ class RagMetricsCalculatorTest {
     }
 
     @Test
+    void hitRate() {
+        Set<String> expected = Set.of("a", "c");
+        assertEquals(1.0, RagMetricsCalculator.hitRateAtK(List.of("x", "a"), expected, 2), 1e-9);
+        assertEquals(1.0, RagMetricsCalculator.hitRateAtK(List.of("a", "b"), expected, 1), 1e-9);
+        assertEquals(0.0, RagMetricsCalculator.hitRateAtK(List.of("x", "y"), expected, 2), 1e-9);
+        assertEquals(0.0, RagMetricsCalculator.hitRateAtK(List.of(), expected, 5), 1e-9);
+    }
+
+    @Test
     void emptyExpected() {
         assertEquals(0.0, RagMetricsCalculator.recallAtK(List.of("a"), Set.of(), 5), 1e-9);
         assertEquals(0.0, RagMetricsCalculator.ndcgAtK(List.of("a"), Set.of(), 5), 1e-9);
+        assertEquals(0.0, RagMetricsCalculator.hitRateAtK(List.of("a"), Set.of(), 5), 1e-9);
     }
 }

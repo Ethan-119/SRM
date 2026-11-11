@@ -51,13 +51,17 @@ class RagEvalTest {
         assertTrue(report.getAvgPrecisionAtK() >= 0 && report.getAvgPrecisionAtK() <= 1);
         assertTrue(report.getMrr() >= 0 && report.getMrr() <= 1);
         assertTrue(report.getAvgNdcgAtK() >= 0 && report.getAvgNdcgAtK() <= 1);
+        assertTrue(report.getAvgHitRate() >= 0 && report.getAvgHitRate() <= 1);
+        assertTrue(report.getEmptyRecallRate() >= 0 && report.getEmptyRecallRate() <= 1);
         assertTrue(report.getLatencyP50() >= 0);
 
         System.out.println("[RagEval] total=" + report.getTotalCases()
                 + " Recall@" + K + "=" + report.getAvgRecallAtK()
                 + " Precision@" + K + "=" + report.getAvgPrecisionAtK()
+                + " HitRate@" + K + "=" + report.getAvgHitRate()
                 + " MRR=" + report.getMrr()
                 + " NDCG@" + K + "=" + report.getAvgNdcgAtK()
+                + " EmptyRecall=" + report.getEmptyRecallRate()
                 + " P50=" + report.getLatencyP50() + "ms");
     }
 }

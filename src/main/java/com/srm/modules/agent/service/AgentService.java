@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
 
 /**
  * 内生智能采购 Agent（Spring AI 内嵌）。
@@ -42,6 +44,13 @@ public class AgentService {
     private final ChatClient chatClient;
     private final ChatHistoryService chatHistoryService;
 
+    /**
+     * 每个 session 一个信号量（初始 1 许可）：串行化同一会话内的「读历史 + 写历史」，
+     * 防止并发消息乱序/竞态。用 {@link Semaphore} 而非 ReentrantLock，因为锁在请求线程获取、
+     * 在 Reactor 线程（doFinally）释放，Semaphore 允许跨线程 release。
+     */
+    private final ConcurrentHashMap<String, Semaphore> sessionLocks = new ConcurrentHashMap<>();
+
     /** 非流式对话。 */
     public String chat(String query, String sessionId) {
         List<Message> history = toAiMessages(chatHistoryService.get(sessionId));
@@ -58,21 +67,37 @@ public class AgentService {
         return answer;
     }
 
-    /** 流式对话（SSE），返回逐 token 的文本流，并在完成后写入历史。 */
+    /** 流式对话（SSE），返回逐 token 的文本流，并在完成/断连时把已生成内容写入历史。 */
     public Flux<String> stream(String query, String sessionId) {
-        List<Message> history = toAiMessages(chatHistoryService.get(sessionId));
-        chatHistoryService.append(sessionId, new ChatMessage("user", query));
+        Semaphore semaphore = sessionLocks.computeIfAbsent(sessionId, k -> new Semaphore(1));
+        semaphore.acquireUninterruptibly();
+        try {
+            List<Message> history = toAiMessages(chatHistoryService.get(sessionId));
+            chatHistoryService.append(sessionId, new ChatMessage("user", query));
 
-        StringBuilder full = new StringBuilder();
-        return chatClient.prompt()
-                .system(SYSTEM_PROMPT)
-                .messages(history)
-                .user(query)
-                .stream()
-                .content()
-                .doOnNext(full::append)
-                .doOnComplete(() -> chatHistoryService.append(sessionId,
-                        new ChatMessage("assistant", full.toString())));
+            StringBuilder full = new StringBuilder();
+            return chatClient.prompt()
+                    .system(SYSTEM_PROMPT)
+                    .messages(history)
+                    .user(query)
+                    .stream()
+                    .content()
+                    .doOnNext(full::append)
+                    .doFinally(sig -> {
+                        try {
+                            // 完成、取消（断连）、出错都落一次：断连时也能保留已生成的半截内容
+                            if (full.length() > 0) {
+                                chatHistoryService.append(sessionId,
+                                        new ChatMessage("assistant", full.toString()));
+                            }
+                        } finally {
+                            semaphore.release();
+                        }
+                    });
+        } catch (Exception e) {
+            semaphore.release();
+            throw e;
+        }
     }
 
     public List<ChatMessage> history(String sessionId) {

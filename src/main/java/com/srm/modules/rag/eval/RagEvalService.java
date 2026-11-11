@@ -70,7 +70,18 @@ public class RagEvalService {
         c.setExpectedAnswerContains(strList(map.get("expectedAnswerContains")));
         c.setTags(strList(map.get("tags")));
         c.setDifficulty(str(map.get("difficulty")));
+        c.setExpectedRefusal(bool(map.get("expectedRefusal")));
         return c;
+    }
+
+    private Boolean bool(Object o) {
+        if (o == null) {
+            return null;
+        }
+        if (o instanceof Boolean b) {
+            return b;
+        }
+        return Boolean.parseBoolean(String.valueOf(o));
     }
 
     private String str(Object o) {

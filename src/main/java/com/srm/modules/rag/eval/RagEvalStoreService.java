@@ -60,8 +60,11 @@ public class RagEvalStoreService {
         run.setAvgPrecision(report.getAvgPrecisionAtK());
         run.setMrr(report.getMrr());
         run.setAvgNdcg(report.getAvgNdcgAtK());
+        run.setAvgHitRate(report.getAvgHitRate());
         run.setAvgAccuracy(report.getAvgAccuracy());
         run.setAvgFaithfulness(report.getAvgFaithfulness());
+        run.setRefusalAccuracy(report.getRefusalAccuracy());
+        run.setEmptyRecallRate(report.getEmptyRecallRate());
         run.setLatencyP50(toLong(report.getLatencyP50()));
         run.setLatencyP95(toLong(report.getLatencyP95()));
         run.setLatencyP99(toLong(report.getLatencyP99()));
@@ -80,8 +83,10 @@ public class RagEvalStoreService {
                 e.setPrecision(r.getPrecisionAtK());
                 e.setMrr(r.getReciprocalRank());
                 e.setNdcg(r.getNdcgAtK());
+                e.setHitRate(r.getHitRate());
                 e.setAccuracy(r.getAccuracy());
                 e.setFaithfulness(r.getFaithfulness());
+                e.setRefused(r.getRefused() == null ? null : (r.getRefused() ? 1 : 0));
                 e.setLatencyMs(r.getLatencyMs());
                 e.setTags(r.getTags() == null ? null : String.join(",", r.getTags()));
                 e.setDifficulty(r.getDifficulty());

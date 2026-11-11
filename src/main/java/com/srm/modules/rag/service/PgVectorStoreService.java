@@ -40,6 +40,11 @@ public class PgVectorStoreService {
         pgVectorJdbcTemplate.update(sql, docId, vector);
     }
 
+    /** 清空向量索引（重建语料用）。 */
+    public void clearAll() {
+        pgVectorJdbcTemplate.update("DELETE FROM " + table);
+    }
+
     /** 余弦相似度检索，返回命中的 doc_id 与相似度。 */
     public List<VectorHit> search(String query, int topK) {
         float[] vec = embed(query);
