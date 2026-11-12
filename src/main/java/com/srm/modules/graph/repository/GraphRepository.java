@@ -32,7 +32,7 @@ public class GraphRepository {
      * 执行只读 Cypher 查询，返回记录列表。
      */
     public List<Record> query(String cypher, Map<String, Object> params) {
-        log.info("[Neo4j] 查询 Cypher: {}\n[Neo4j] 参数: {}", cypher.strip(), params);
+        log.debug("[Neo4j] 查询 Cypher: {}\n[Neo4j] 参数: {}", cypher.strip(), params);
         try (Session session = session()) {
             return session.executeRead(tx -> tx.run(cypher, params).list());
         }
@@ -49,7 +49,7 @@ public class GraphRepository {
      * 执行写 Cypher（CREATE/MERGE/SET/DELETE），不返回结果。
      */
     public void write(String cypher, Map<String, Object> params) {
-        log.info("[Neo4j] 写入 Cypher: {}\n[Neo4j] 参数: {}", cypher.strip(), params);
+        log.debug("[Neo4j] 写入 Cypher: {}\n[Neo4j] 参数: {}", cypher.strip(), params);
         try (Session session = session()) {
             session.executeWrite(tx -> {
                 tx.run(cypher, params).consume();
@@ -59,8 +59,8 @@ public class GraphRepository {
     }
 
     /**
-     * 执行一段由分号分隔、含 {@code //} 行注释的 Cypher 脚本（幂等脚本，用于灌入 schema/seed）。
-     * 所有语句在同一事务内执行，保证脚本内跨语句的变量（如 {@code (p)}/{@code (c)}）能正确延续；
+     * 执行一段由分号分隔、含 {@code //} 行注释的 Cypher 脚本（幂等脚本，用于灌入 seed 数据）。
+     * 所有语句在同一事务内执行，保证脚本内跨语句的变量能正确延续；
      * 任一条失败则整体回滚，可安全重跑。
      */
     public int runScript(String cypherScript) {
@@ -73,6 +73,22 @@ public class GraphRepository {
                 }
                 return null;
             });
+        }
+        return statements.size();
+    }
+
+    /**
+     * 执行 Schema 脚本（CREATE CONSTRAINT / CREATE INDEX）。
+     * <p>注意：Neo4j 的 schema 命令不能在事务内执行，必须用 {@code session.run()} 自动提交，
+     * 因此这里与 {@link #runScript(String)} 分开，逐条 auto-commit。</p>
+     */
+    public int runSchemaScript(String cypherScript) {
+        List<String> statements = splitStatements(cypherScript);
+        try (Session session = session()) {
+            for (String stmt : statements) {
+                log.info("[Neo4j] 执行 Schema 语句: {}", stmt);
+                session.run(stmt).consume();
+            }
         }
         return statements.size();
     }

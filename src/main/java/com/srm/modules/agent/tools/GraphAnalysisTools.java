@@ -11,6 +11,7 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -69,6 +70,37 @@ public class GraphAnalysisTools {
                         .append("（权重 ").append(pct(d.getWeight())).append("）: ")
                         .append(fmt(d.getScore())).append(" 分，").append(d.getReason()).append('\n');
             }
+        }
+        return sb.toString();
+    }
+
+    @Tool(description = "对多个供应商一次性批量综合评分并按总分降序对比，适合“多个供应商评分对比/排名”类问题；传入供应商ID列表")
+    public String compareSuppliers(@ToolParam(description = "供应商ID列表") List<Long> supplierIds) {
+        if (supplierIds == null || supplierIds.isEmpty()) {
+            return "未提供供应商ID。请先调用供应商搜索工具确定候选供应商，再传入其ID列表。";
+        }
+        List<SupplierScoreVO> list = supplierScoreService.scoreBatch(supplierIds);
+        if (list.isEmpty()) {
+            return "这些供应商暂无评分数据（图谱中可能不存在对应节点）。";
+        }
+        List<SupplierScoreVO> sorted = list.stream()
+                .sorted(Comparator.comparingDouble((SupplierScoreVO v) ->
+                        v.getTotalScore() == null ? Double.NEGATIVE_INFINITY : v.getTotalScore()).reversed())
+                .toList();
+        StringBuilder sb = new StringBuilder("供应商综合评分对比（按总分降序）：\n");
+        for (SupplierScoreVO vo : sorted) {
+            sb.append("- ").append(vo.getSupplierName())
+                    .append("（ID ").append(vo.getSupplierId()).append("）")
+                    .append(" 总分 ").append(fmt(vo.getTotalScore())).append(" 分");
+            if (vo.getDimensions() != null && !vo.getDimensions().isEmpty()) {
+                sb.append("，维度：");
+                for (int i = 0; i < vo.getDimensions().size(); i++) {
+                    if (i > 0) sb.append(" / ");
+                    SupplierScoreVO.ScoreDimension d = vo.getDimensions().get(i);
+                    sb.append(d.getName()).append(' ').append(fmt(d.getScore()));
+                }
+            }
+            sb.append('\n');
         }
         return sb.toString();
     }

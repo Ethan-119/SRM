@@ -7,16 +7,19 @@ import org.neo4j.driver.Record;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 4.4 供应商综合评分。
  *
- * 权重：价格 35% / 质量 25% / 交期 20% / 服务 10% / 风险 10%。
- * 其中「价格 / 交期 / 风险」由 Neo4j 图谱实时计算；
- * 「质量 / 服务」当前使用信用等级等作为代理指标，后续接入检验合格率、退货率、
- * 准时交货率、服务响应等数据源后替换，仅需实现对应 fetchXxx 方法即可。
+ * <p>权重：价格 35% / 质量 25% / 交期 20% / 服务 10% / 风险 10%。</p>
+ *
+ * <p>性能：单条评分原本需要 6 次 Neo4j 往返；批量评分 {@link #scoreBatch(List)}
+ * 将其压缩为 3 次批量查询（画像 / 供应统计 / 关联风险），与供应商数量无关，
+ * 避免 N 个供应商产生 6N 次跨容器查询。</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -24,53 +27,139 @@ public class SupplierScoreService {
 
     private final GraphRepository graphRepository;
 
+    /** 单供应商评分（兼容旧接口）。 */
     public SupplierScoreVO score(Long supplierId) {
-        String name = fetchName(supplierId);
-        String creditLevel = fetchCreditLevel(supplierId);
-
-        // 各维度得分
-        double priceScore = priceScore(supplierId);
-        double qualityScore = qualityScore(creditLevel);
-        double deliveryScore = deliveryScore(supplierId);
-        double serviceScore = 80.0; // 默认值，待接入服务反馈数据
-        double riskScore = riskScore(supplierId);
-
-        double total = 0.35 * priceScore
-                + 0.25 * qualityScore
-                + 0.20 * deliveryScore
-                + 0.10 * serviceScore
-                + 0.10 * riskScore;
-
-        SupplierScoreVO vo = new SupplierScoreVO();
-        vo.setSupplierId(supplierId);
-        vo.setSupplierName(name);
-        vo.setTotalScore(round(total));
-
-        List<SupplierScoreVO.ScoreDimension> dims = new ArrayList<>();
-        dims.add(dim("价格分", 0.35, priceScore, "供应商均价相对市场均价的优势"));
-        dims.add(dim("质量分", 0.25, qualityScore, "信用等级代理：" + creditLevel));
-        dims.add(dim("交期分", 0.20, deliveryScore, "平均交货周期（leadTime）"));
-        dims.add(dim("服务分", 0.10, serviceScore, "默认值，待接入服务反馈数据"));
-        dims.add(dim("风险分", 0.10, riskScore, "图谱关联风险 + 地域风险"));
-        vo.setDimensions(dims);
-        return vo;
+        if (supplierId == null) {
+            return null;
+        }
+        List<SupplierScoreVO> list = scoreBatch(List.of(supplierId));
+        return list.isEmpty() ? null : list.get(0);
     }
 
-    // ==================== 各维度 ====================
-
-    /** 价格分：供应商均价 vs 市场均价，正优势（更便宜）得分更高。 */
-    private double priceScore(Long supplierId) {
-        String cypher = """
-                MATCH (s:Supplier {id: $supplierId})-[sup:SUPPLIES]->(m:Material)
-                WITH m, toFloat(sup.price) AS myPrice
-                MATCH (m)<-[sup2:SUPPLIES]-(:Supplier)
-                WITH m, myPrice, avg(toFloat(sup2.price)) AS marketPrice
-                RETURN avg((marketPrice - myPrice) / marketPrice) AS priceAdvantage
-                """;
-        Double advantage = firstDouble(cypher, "priceAdvantage", Map.of("supplierId", supplierId));
-        if (advantage == null) {
-            return 50.0; // 无供应数据，取中性分
+    /**
+     * 批量综合评分。仅返回图谱中真实存在的供应商（按入参顺序）。
+     */
+    public List<SupplierScoreVO> scoreBatch(List<Long> supplierIds) {
+        if (supplierIds == null || supplierIds.isEmpty()) {
+            return List.of();
         }
+        List<Long> ids = supplierIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, Profile> profiles = loadProfiles(ids);
+        Map<Long, SupplyStats> stats = loadSupplyStats(ids);
+        Map<Long, Long> related = loadRelatedCount(ids);
+
+        List<SupplierScoreVO> result = new ArrayList<>();
+        for (Long id : supplierIds) {
+            if (id == null) {
+                continue;
+            }
+            Profile p = profiles.get(id);
+            if (p == null) {
+                continue; // 图谱中不存在该供应商
+            }
+            SupplyStats st = stats.get(id);
+            long rel = related.getOrDefault(id, 0L);
+
+            double priceScore = st == null || st.priceAdvantage == null
+                    ? 50.0 : priceScore(st.priceAdvantage);
+            double qualityScore = qualityScore(p.creditLevel);
+            double deliveryScore = st == null || st.avgLeadTime == null
+                    ? 70.0 : deliveryScore(st.avgLeadTime);
+            double serviceScore = 80.0; // 默认值，待接入服务反馈数据
+            double riskScore = riskScore(rel, p.riskTag);
+
+            double total = 0.35 * priceScore
+                    + 0.25 * qualityScore
+                    + 0.20 * deliveryScore
+                    + 0.10 * serviceScore
+                    + 0.10 * riskScore;
+
+            SupplierScoreVO vo = new SupplierScoreVO();
+            vo.setSupplierId(id);
+            vo.setSupplierName(p.name);
+            vo.setTotalScore(round(total));
+
+            List<SupplierScoreVO.ScoreDimension> dims = new ArrayList<>();
+            dims.add(dim("价格分", 0.35, priceScore, "供应商均价相对市场均价的优势"));
+            dims.add(dim("质量分", 0.25, qualityScore, "信用等级代理：" + p.creditLevel));
+            dims.add(dim("交期分", 0.20, deliveryScore, "平均交货周期（leadTime）"));
+            dims.add(dim("服务分", 0.10, serviceScore, "默认值，待接入服务反馈数据"));
+            dims.add(dim("风险分", 0.10, riskScore, "图谱关联风险 + 地域风险"));
+            vo.setDimensions(dims);
+            result.add(vo);
+        }
+        return result;
+    }
+
+    // ==================== 批量查询 ====================
+
+    /** 一次取回 name / creditLevel / region.riskTag。 */
+    private Map<Long, Profile> loadProfiles(List<Long> ids) {
+        String cypher = """
+                UNWIND $ids AS id
+                MATCH (s:Supplier {id: id})
+                OPTIONAL MATCH (s)-[:LOCATED_IN]->(r:Region)
+                RETURN s.id AS id, s.name AS name,
+                       s.creditLevel AS creditLevel, r.riskTag AS riskTag
+                """;
+        Map<Long, Profile> map = new HashMap<>();
+        for (Record r : graphRepository.query(cypher, Map.of("ids", ids))) {
+            Profile p = new Profile();
+            p.name = str(r, "name");
+            p.creditLevel = str(r, "creditLevel");
+            p.riskTag = str(r, "riskTag");
+            map.put(r.get("id").asLong(), p);
+        }
+        return map;
+    }
+
+    /** 一次取回平均交期与价格优势。 */
+    private Map<Long, SupplyStats> loadSupplyStats(List<Long> ids) {
+        String cypher = """
+                UNWIND $ids AS id
+                MATCH (s:Supplier {id: id})-[sup:SUPPLIES]->(m:Material)
+                WITH id, m, toFloat(sup.price) AS myPrice, toFloat(sup.leadTime) AS leadTime
+                MATCH (m)<-[sup2:SUPPLIES]-(:Supplier)
+                WITH id, m, myPrice, leadTime, avg(toFloat(sup2.price)) AS marketPrice
+                RETURN id AS id,
+                       avg(leadTime) AS avgLeadTime,
+                       avg((marketPrice - myPrice) / marketPrice) AS priceAdvantage
+                """;
+        Map<Long, SupplyStats> map = new HashMap<>();
+        for (Record r : graphRepository.query(cypher, Map.of("ids", ids))) {
+            SupplyStats st = new SupplyStats();
+            st.avgLeadTime = doubleOrNull(r, "avgLeadTime");
+            st.priceAdvantage = doubleOrNull(r, "priceAdvantage");
+            map.put(r.get("id").asLong(), st);
+        }
+        return map;
+    }
+
+    /** 一次取回所有供应商的关联供应商数量。 */
+    private Map<Long, Long> loadRelatedCount(List<Long> ids) {
+        String cypher = """
+                UNWIND $ids AS id
+                MATCH path = (s:Supplier {id: id})
+                  -[:SUBSIDIARY_OF|HAS_SHAREHOLDER|SHARES_EXECUTIVE_WITH*1..3]
+                  -(related:Supplier)
+                WHERE related <> s
+                RETURN s.id AS id, count(DISTINCT related) AS relatedCount
+                """;
+        Map<Long, Long> map = new HashMap<>();
+        for (Record r : graphRepository.query(cypher, Map.of("ids", ids))) {
+            map.put(r.get("id").asLong(), r.get("relatedCount").asLong());
+        }
+        return map;
+    }
+
+    // ==================== 维度计算 ====================
+
+    /** 价格分：正优势（更便宜）得分更高。 */
+    private double priceScore(double advantage) {
         return clamp(50 + advantage * 100, 0, 100);
     }
 
@@ -89,23 +178,12 @@ public class SupplierScoreService {
     }
 
     /** 交期分：平均 leadTime 越短得分越高。 */
-    private double deliveryScore(Long supplierId) {
-        String cypher = """
-                MATCH (s:Supplier {id: $supplierId})-[sup:SUPPLIES]->(m:Material)
-                RETURN avg(toFloat(sup.leadTime)) AS avgLeadTime
-                """;
-        Double avgLeadTime = firstDouble(cypher, "avgLeadTime", Map.of("supplierId", supplierId));
-        if (avgLeadTime == null) {
-            return 70.0;
-        }
+    private double deliveryScore(double avgLeadTime) {
         return clamp(100 - avgLeadTime * 2, 0, 100);
     }
 
     /** 风险分：关联供应商越多、地域风险越高，得分越低。 */
-    private double riskScore(Long supplierId) {
-        long relatedCount = countRelated(supplierId);
-        String regionRisk = regionRisk(supplierId);
-
+    private double riskScore(long relatedCount, String regionRisk) {
         double score = clamp(100 - relatedCount * 15, 0, 100);
         if (regionRisk != null) {
             score -= switch (regionRisk) {
@@ -117,48 +195,7 @@ public class SupplierScoreService {
         return clamp(score, 0, 100);
     }
 
-    // ==================== 基础查询辅助 ====================
-
-    private String fetchName(Long supplierId) {
-        List<Record> r = graphRepository.query(
-                "MATCH (s:Supplier {id: $id}) RETURN s.name AS name",
-                Map.of("id", supplierId));
-        return r.isEmpty() ? null : r.get(0).get("name").asString();
-    }
-
-    private String fetchCreditLevel(Long supplierId) {
-        List<Record> r = graphRepository.query(
-                "MATCH (s:Supplier {id: $id}) RETURN s.creditLevel AS creditLevel",
-                Map.of("id", supplierId));
-        return r.isEmpty() ? null : r.get(0).get("creditLevel").asString();
-    }
-
-    private long countRelated(Long supplierId) {
-        String cypher = """
-                MATCH path = (s:Supplier {id: $id})
-                  -[:SUBSIDIARY_OF|HAS_SHAREHOLDER|SHARES_EXECUTIVE_WITH*1..3]
-                  -(related:Supplier)
-                WHERE related <> s
-                RETURN count(DISTINCT related) AS relatedCount
-                """;
-        List<Record> r = graphRepository.query(cypher, Map.of("id", supplierId));
-        return r.isEmpty() ? 0 : r.get(0).get("relatedCount").asLong();
-    }
-
-    private String regionRisk(Long supplierId) {
-        List<Record> r = graphRepository.query(
-                "MATCH (s:Supplier {id: $id})-[:LOCATED_IN]->(reg:Region) RETURN reg.riskTag AS riskTag",
-                Map.of("id", supplierId));
-        return r.isEmpty() ? null : r.get(0).get("riskTag").asString();
-    }
-
-    private Double firstDouble(String cypher, String key, Map<String, Object> params) {
-        List<Record> r = graphRepository.query(cypher, params);
-        if (r.isEmpty() || r.get(0).get(key).isNull()) {
-            return null;
-        }
-        return r.get(0).get(key).asNumber().doubleValue();
-    }
+    // ==================== 工具方法 ====================
 
     private SupplierScoreVO.ScoreDimension dim(String name, double weight, double score, String reason) {
         SupplierScoreVO.ScoreDimension d = new SupplierScoreVO.ScoreDimension();
@@ -169,11 +206,34 @@ public class SupplierScoreService {
         return d;
     }
 
+    private String str(Record r, String key) {
+        org.neo4j.driver.Value v = r.get(key);
+        return (v == null || v.isNull()) ? null : v.asString();
+    }
+
+    private Double doubleOrNull(Record r, String key) {
+        org.neo4j.driver.Value v = r.get(key);
+        return (v == null || v.isNull()) ? null : v.asNumber().doubleValue();
+    }
+
     private static double clamp(double v, double min, double max) {
         return Math.max(min, Math.min(max, v));
     }
 
     private static double round(double v) {
         return Math.round(v * 100.0) / 100.0;
+    }
+
+    // ==================== 内部结构 ====================
+
+    private static final class Profile {
+        String name;
+        String creditLevel;
+        String riskTag;
+    }
+
+    private static final class SupplyStats {
+        Double avgLeadTime;
+        Double priceAdvantage;
     }
 }
