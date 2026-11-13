@@ -18,7 +18,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/**")
                 .excludePathPatterns(
                         "/api/auth/login",           // 登录接口
-                        "/api/agent/**",             // AI Agent 代理
                         "/doc.html",                  // Knife4j
                         "/webjars/**",
                         "/v3/api-docs/**",

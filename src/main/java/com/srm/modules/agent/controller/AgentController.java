@@ -2,6 +2,7 @@ package com.srm.modules.agent.controller;
 
 import cn.hutool.json.JSONUtil;
 import com.srm.common.Result;
+import com.srm.common.util.UserContext;
 import com.srm.modules.agent.dto.AgentChatDTO;
 import com.srm.modules.agent.dto.ChatMessage;
 import com.srm.modules.agent.service.AgentService;
@@ -34,12 +35,13 @@ public class AgentController {
     @Operation(summary = "智能采购对话（非流式）")
     @PostMapping("/chat")
     public Result<String> chat(@RequestBody AgentChatDTO request) {
-        return Result.ok(agentService.chat(request.getQuery(), request.getSessionId()));
+        return Result.ok(agentService.chat(request.getQuery(), request.getSessionId(), UserContext.getUserId()));
     }
 
     @Operation(summary = "智能采购对话（SSE流式）")
     @PostMapping("/chat/stream")
     public void chatStream(@RequestBody AgentChatDTO request, HttpServletResponse response) throws IOException {
+        Long userId = UserContext.getUserId();
         response.setContentType("text/event-stream");
         response.setCharacterEncoding("UTF-8");
         response.setHeader("Cache-Control", "no-cache");
@@ -48,7 +50,7 @@ public class AgentController {
 
         ServletOutputStream out = response.getOutputStream();
         try {
-            for (String chunk : agentService.stream(request.getQuery(), request.getSessionId()).toIterable()) {
+            for (String chunk : agentService.stream(request.getQuery(), request.getSessionId(), userId).toIterable()) {
                 out.write(("data: " + sseContent(chunk) + "\n\n").getBytes(StandardCharsets.UTF_8));
                 out.flush();
             }
@@ -63,13 +65,13 @@ public class AgentController {
     @Operation(summary = "获取对话历史")
     @GetMapping("/history/{sessionId}")
     public Result<List<ChatMessage>> history(@PathVariable String sessionId) {
-        return Result.ok(agentService.history(sessionId));
+        return Result.ok(agentService.history(sessionId, UserContext.getUserId()));
     }
 
     @Operation(summary = "清空对话历史")
     @DeleteMapping("/history/{sessionId}")
     public Result<Void> clearHistory(@PathVariable String sessionId) {
-        agentService.clearHistory(sessionId);
+        agentService.clearHistory(sessionId, UserContext.getUserId());
         return Result.ok();
     }
 

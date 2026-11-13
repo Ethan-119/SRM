@@ -2,6 +2,7 @@ package com.srm.config.interceptor;
 
 import com.srm.common.CacheConstants;
 import com.srm.common.util.JwtUtil;
+import com.srm.common.util.UserContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -23,6 +24,9 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        // 清理线程池复用可能残留的上一次上下文，避免串号
+        UserContext.clear();
+
         // OPTIONS 预检请求直接放行
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
@@ -61,9 +65,12 @@ public class LoginInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        // 3. 管理员权限校验（知识库等管理功能）
+        // 3. 写入当前登录用户上下文（供 Service 层取当前用户 / 归属校验）
+        Integer isAdmin = JwtUtil.getIsAdmin(token);
+        UserContext.set(userId, isAdmin);
+
+        // 4. 管理员权限校验（知识库等管理功能）
         if (isAdminRequired(request.getRequestURI())) {
-            Integer isAdmin = JwtUtil.getIsAdmin(token);
             if (isAdmin == null || isAdmin != 1) {
                 log.warn("用户 {} 无管理员权限，拒绝访问: {}", userId, request.getRequestURI());
                 response.setContentType("application/json;charset=UTF-8");
@@ -74,6 +81,11 @@ public class LoginInterceptor implements HandlerInterceptor {
         }
 
         return true;
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
+        UserContext.clear();
     }
 
     /** 需要管理员权限的路径（知识库管理） */

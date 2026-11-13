@@ -2,6 +2,7 @@ package com.srm.config;
 
 import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
+import com.srm.common.util.UserContext;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.BlockAttackInnerInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
@@ -34,11 +35,20 @@ public class MyBatisPlusConfig {
                 this.strictInsertFill(metaObject, "createTime", LocalDateTime.class, LocalDateTime.now());
                 this.strictInsertFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
                 this.strictInsertFill(metaObject, "isDeleted", Integer.class, 0);
+                Long userId = UserContext.getUserId();
+                if (userId != null) {
+                    this.strictInsertFill(metaObject, "createBy", Long.class, userId);
+                    this.strictInsertFill(metaObject, "updateBy", Long.class, userId);
+                }
             }
 
             @Override
             public void updateFill(MetaObject metaObject) {
                 this.strictUpdateFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
+                Long userId = UserContext.getUserId();
+                if (userId != null) {
+                    this.strictUpdateFill(metaObject, "updateBy", Long.class, userId);
+                }
             }
         };
     }

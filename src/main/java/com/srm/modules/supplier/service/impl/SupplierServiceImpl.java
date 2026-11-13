@@ -81,18 +81,7 @@ public class SupplierServiceImpl extends ServiceImpl<SupplierMapper, Supplier> i
                     }
 
                     // 查 DB
-                    Supplier supplier = super.getById(id);
-                    if (supplier != null && isActive(supplier.getStatus())) {
-                        long ttl = CacheConstants.SUPPLIER_TTL_HOURS * 3600;
-                        ttl += TTL_RANDOM.nextInt(CacheConstants.TTL_JITTER_MAX_SECONDS);
-                        stringRedisTemplate.opsForValue().set(
-                                key, JSONUtil.toJsonStr(supplier), Duration.ofSeconds(ttl));
-                    } else {
-                        // 空值缓存，防穿透
-                        stringRedisTemplate.opsForValue().set(
-                                key, "", Duration.ofMinutes(CacheConstants.NULL_CACHE_TTL_MINUTES));
-                    }
-                    return supplier;
+                    return queryDbAndCache(id, key);
                 } finally {
                     lock.unlock();
                 }
@@ -101,7 +90,7 @@ public class SupplierServiceImpl extends ServiceImpl<SupplierMapper, Supplier> i
             Thread.currentThread().interrupt();
         }
 
-        // 获取锁失败 → 短暂等待后重试读缓存
+        // 获取锁失败 → 短暂等待后重试读缓存，仍未命中则回源 DB，避免并发下误返回 null
         try {
             Thread.sleep(100);
         } catch (InterruptedException e) {
@@ -111,7 +100,7 @@ public class SupplierServiceImpl extends ServiceImpl<SupplierMapper, Supplier> i
         if (json != null && !json.isEmpty()) {
             return JSONUtil.toBean(json, Supplier.class);
         }
-        return null;
+        return queryDbAndCache(id, key);
     }
 
     // ==================== 写：先更 DB，再删缓存 ====================
@@ -148,6 +137,22 @@ public class SupplierServiceImpl extends ServiceImpl<SupplierMapper, Supplier> i
     }
 
     // ==================== 辅助 ====================
+
+    /** 回源 DB 查询并按需写缓存：有效则缓存实体，否则写空值防穿透 */
+    private Supplier queryDbAndCache(Serializable id, String key) {
+        Supplier supplier = super.getById(id);
+        if (supplier != null && isActive(supplier.getStatus())) {
+            long ttl = CacheConstants.SUPPLIER_TTL_HOURS * 3600;
+            ttl += TTL_RANDOM.nextInt(CacheConstants.TTL_JITTER_MAX_SECONDS);
+            stringRedisTemplate.opsForValue().set(
+                    key, JSONUtil.toJsonStr(supplier), Duration.ofSeconds(ttl));
+        } else {
+            // 空值缓存，防穿透
+            stringRedisTemplate.opsForValue().set(
+                    key, "", Duration.ofMinutes(CacheConstants.NULL_CACHE_TTL_MINUTES));
+        }
+        return supplier;
+    }
 
     /** 状态: 2-已准入 3-合作中 */
     private boolean isActive(Integer status) {

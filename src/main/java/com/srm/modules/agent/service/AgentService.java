@@ -53,9 +53,9 @@ public class AgentService {
     private final ConcurrentHashMap<String, Semaphore> sessionLocks = new ConcurrentHashMap<>();
 
     /** 非流式对话。 */
-    public String chat(String query, String sessionId) {
-        List<Message> history = toAiMessages(chatHistoryService.get(sessionId));
-        chatHistoryService.append(sessionId, new ChatMessage("user", query));
+    public String chat(String query, String sessionId, Long userId) {
+        List<Message> history = toAiMessages(chatHistoryService.get(sessionId, userId));
+        chatHistoryService.append(sessionId, userId, new ChatMessage("user", query));
 
         String answer = chatClient.prompt()
                 .system(SYSTEM_PROMPT)
@@ -64,17 +64,18 @@ public class AgentService {
                 .call()
                 .content();
 
-        chatHistoryService.append(sessionId, new ChatMessage("assistant", answer));
+        chatHistoryService.append(sessionId, userId, new ChatMessage("assistant", answer));
         return answer;
     }
 
     /** 流式对话（SSE），返回逐 token 的文本流，并在完成/断连时把已生成内容写入历史。 */
-    public Flux<String> stream(String query, String sessionId) {
-        Semaphore semaphore = sessionLocks.computeIfAbsent(sessionId, k -> new Semaphore(1));
+    public Flux<String> stream(String query, String sessionId, Long userId) {
+        String lockKey = userId + ":" + sessionId;
+        Semaphore semaphore = sessionLocks.computeIfAbsent(lockKey, k -> new Semaphore(1));
         semaphore.acquireUninterruptibly();
         try {
-            List<Message> history = toAiMessages(chatHistoryService.get(sessionId));
-            chatHistoryService.append(sessionId, new ChatMessage("user", query));
+            List<Message> history = toAiMessages(chatHistoryService.get(sessionId, userId));
+            chatHistoryService.append(sessionId, userId, new ChatMessage("user", query));
 
             StringBuilder full = new StringBuilder();
             return chatClient.prompt()
@@ -88,7 +89,7 @@ public class AgentService {
                         try {
                             // 完成、取消（断连）、出错都落一次：断连时也能保留已生成的半截内容
                             if (full.length() > 0) {
-                                chatHistoryService.append(sessionId,
+                                chatHistoryService.append(sessionId, userId,
                                         new ChatMessage("assistant", full.toString()));
                             }
                         } finally {
@@ -101,12 +102,12 @@ public class AgentService {
         }
     }
 
-    public List<ChatMessage> history(String sessionId) {
-        return chatHistoryService.getFull(sessionId);
+    public List<ChatMessage> history(String sessionId, Long userId) {
+        return chatHistoryService.getFull(sessionId, userId);
     }
 
-    public void clearHistory(String sessionId) {
-        chatHistoryService.clear(sessionId);
+    public void clearHistory(String sessionId, Long userId) {
+        chatHistoryService.clear(sessionId, userId);
     }
 
     private List<Message> toAiMessages(List<ChatMessage> messages) {

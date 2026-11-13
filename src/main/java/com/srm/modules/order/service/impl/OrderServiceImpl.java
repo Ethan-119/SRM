@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.srm.common.CacheConstants;
 import com.srm.common.exception.BusinessException;
+import com.srm.common.util.UserContext;
 import com.srm.modules.order.dto.OrderPageDTO;
 import com.srm.modules.order.entity.Order;
 import com.srm.modules.order.mapper.OrderMapper;
@@ -57,7 +58,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Override
     public boolean save(Order entity) {
-        Long userId = entity.getCreateBy();
+        Long userId = UserContext.getUserId();
         if (userId == null) {
             return super.save(entity);
         }

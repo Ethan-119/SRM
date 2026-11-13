@@ -197,16 +197,19 @@ DROP TABLE IF EXISTS srm_agent_message;
 CREATE TABLE srm_agent_message (
     id          BIGINT          NOT NULL,
     session_id  VARCHAR(64)     NOT NULL,
+    user_id     BIGINT,
     role        VARCHAR(16)     NOT NULL,
     content     TEXT            NOT NULL,
     create_time TIMESTAMP       NOT NULL DEFAULT now(),
     CONSTRAINT pk_srm_agent_message PRIMARY KEY (id)
 );
 CREATE INDEX idx_agent_msg_session ON srm_agent_message (session_id, id);
+CREATE INDEX idx_agent_msg_user ON srm_agent_message (user_id, session_id);
 
 COMMENT ON TABLE  srm_agent_message IS 'AI 会话历史消息（长期记忆）';
 COMMENT ON COLUMN srm_agent_message.id IS '主键 ID';
 COMMENT ON COLUMN srm_agent_message.session_id IS '会话 ID';
+COMMENT ON COLUMN srm_agent_message.user_id IS '所属用户 ID（会话归属）';
 COMMENT ON COLUMN srm_agent_message.role IS '角色: user / assistant';
 COMMENT ON COLUMN srm_agent_message.content IS '消息内容';
 COMMENT ON COLUMN srm_agent_message.create_time IS '创建时间';

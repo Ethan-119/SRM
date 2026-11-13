@@ -22,6 +22,9 @@ public class AgentMessage {
     /** 会话 ID */
     private String sessionId;
 
+    /** 所属用户 ID（会话归属，用于越权校验） */
+    private Long userId;
+
     /** 角色：user / assistant */
     private String role;
 
